@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const todo_controller_1 = require("../controller/todo.controller");
+const auth_1 = require("../middleware/auth");
+const rate_limit_1 = require("../middleware/rate-limit");
+const router = (0, express_1.Router)();
+router.get('/', auth_1.authMiddleware, todo_controller_1.getTodos);
+router.post('/', auth_1.authMiddleware, rate_limit_1.writeLimiter, todo_controller_1.createTodo);
+router.patch('/:id', auth_1.authMiddleware, rate_limit_1.writeLimiter, todo_controller_1.updateTodo);
+router.delete('/:id', auth_1.authMiddleware, rate_limit_1.writeLimiter, todo_controller_1.deleteTodo);
+exports.default = router;

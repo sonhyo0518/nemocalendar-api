@@ -1,0 +1,47 @@
+# =============================================================================
+# Nemo Calendar backend — 실행 환경 요구사항
+#
+# Python/pip 용 파일이 아닙니다.
+#   pip install -r requirements.txt   <- 실행하지 마세요.
+# Node 패키지는 이 폴더에서 설치합니다.
+#   npm install
+# =============================================================================
+
+# --- Runtime (필수) ---
+# Node.js >= 20.9.0
+# npm >= 10
+# MySQL >= 8.0               # DATABASE_URL -> localhost:3306/nemocalendar
+# Google OAuth Web Client    # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+# JWT_SECRET
+
+# --- 선택 ---
+# Cloudflare R2              # 배너 이미지 (R2_* env, @aws-sdk/client-s3)
+
+# --- dependencies (package.json) ---
+# @aws-sdk/client-s3 ^3.1110.0   # R2 (S3 호환) 업로드
+# @prisma/client ^6.17.1
+# cookie-parser ^1.4.7           # HTTP 쿠키 파싱
+# cors ^2.8.6
+# express ^5.2.1
+# express-rate-limit ^7.5.0
+# googleapis ^173.0.0
+# helmet ^8.3.0
+# jsonwebtoken ^9.0.3
+# multer ^2.2.0                  # 배너 multipart 업로드
+
+# --- devDependencies (package.json) ---
+# @types/cookie-parser ^1.4.10
+# @types/cors ^2.8.19
+# @types/express ^5.0.6
+# @types/jsonwebtoken ^9.0.10
+# @types/multer ^2.2.0
+# @types/node ^26.1.1
+# dotenv ^17.4.2
+# prisma ^6.19.3
+# ts-node-dev ^2.0.0
+# tsx ^4.23.1
+# typescript ^7.0.2
+
+# --- Prisma ---
+# npx prisma generate          # Client 생성 (src/generated/prisma)
+# npx prisma db push           # 스키마 → DB 반영 (로컬 초기 설정)

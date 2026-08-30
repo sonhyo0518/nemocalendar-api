@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model anniversaries {
+  idx         BigInt   @id @default(autoincrement())
+  user_idx    BigInt
+  title       String   @db.VarChar(255)
+  target_date DateTime @db.Date
+  is_dday     Boolean  @default(true)
+  color       String?  @db.VarChar(32)
+  users       users    @relation(fields: [user_idx], references: [idx], onDelete: Cascade, map: "FK_anniversaries_users")
+
+  @@index([user_idx], map: "FK_anniversaries_users")
+}
+
+model pins {
+  idx        BigInt   @id @default(autoincrement())
+  user_idx   BigInt
+  content    String   @db.Text
+  is_pinned  Boolean
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  users      users    @relation(fields: [user_idx], references: [idx], onDelete: Cascade, map: "FK_pins_users")
+
+  @@index([user_idx], map: "FK_pins_users")
+}
+
+model todos {
+  idx             BigInt           @id @default(autoincrement())
+  user_idx        BigInt
+  category_idx    BigInt?
+  content         String           @db.Text
+  target_date     DateTime         @default(dbgenerated("(curdate())")) @db.Date
+  is_completed    Boolean          @default(false)
+  sequence        Int              @default(0)
+  status          String           @default("todo") @db.VarChar(20)
+  priority        String           @default("medium") @db.VarChar(10)
+  todo_categories todo_categories? @relation(fields: [category_idx], references: [idx], onUpdate: Restrict, map: "FK_todos_todo_categories")
+  users           users            @relation(fields: [user_idx], references: [idx], onDelete: Cascade, map: "FK_todos_users")
+
+  @@index([user_idx], map: "FK_todos_users")
+  @@index([category_idx], map: "FK_todos_todo_categories")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  idx                  BigInt             @id @default(autoincrement())
+  google_id            String             @unique(map: "google_id") @db.VarChar(255)
+  email                String             @unique(map: "email") @db.VarChar(255)
+  name                 String             @db.VarChar(255)
+  location             String?            @db.VarChar(255)
+  profile_img_url      String?            @db.Text
+  banner_img_url       String?            @db.Text
+  google_refresh_token String?            @db.Text
+  created_at           DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at           DateTime?          @default(now()) @db.Timestamp(0)
+  theme_color          String?            @db.VarChar(7)
+  anniversaries        anniversaries[]
+  bookmark_folders     bookmark_folders[]
+  bookmarks            bookmarks[]
+  pins                 pins[]
+  todo_categories      todo_categories[]
+  todos                todos[]
+}
+
+model todo_categories {
+  idx      BigInt  @id @default(autoincrement())
+  user_idx BigInt
+  name     String  @db.VarChar(255)
+  color    String  @db.VarChar(32)
+  sequence Int     @default(0)
+  users    users   @relation(fields: [user_idx], references: [idx], onDelete: Cascade, onUpdate: Restrict, map: "FK_todo_categories_users")
+  todos    todos[]
+
+  @@index([user_idx], map: "FK_todo_categories_users")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model bookmarks {
+  idx               BigInt            @id @default(autoincrement())
+  user_idx          BigInt
+  folder_idx        BigInt?
+  url               String            @db.VarChar(2048)
+  title             String            @db.VarChar(255)
+  description       String?           @db.Text
+  favicon_url       String?           @db.VarChar(2048)
+  preview_image_url String?           @db.VarChar(2048)
+  sequence          Int               @default(0)
+  created_at        DateTime          @default(now()) @db.Timestamp(0)
+  bookmark_folders  bookmark_folders? @relation(fields: [folder_idx], references: [idx], map: "FK_bookmarks_folders")
+  users             users             @relation(fields: [user_idx], references: [idx], onDelete: Cascade, map: "FK_bookmarks_users")
+
+  @@index([user_idx], map: "FK_bookmarks_users")
+  @@index([user_idx, sequence], map: "IX_bookmarks_user_sequence")
+  @@index([folder_idx], map: "FK_bookmarks_folders")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model bookmark_folders {
+  idx        BigInt      @id @default(autoincrement())
+  user_idx   BigInt
+  name       String      @db.VarChar(255)
+  sequence   Int         @default(0)
+  created_at DateTime    @default(now()) @db.Timestamp(0)
+  users      users       @relation(fields: [user_idx], references: [idx], onDelete: Cascade, map: "FK_bookmark_folders_users")
+  bookmarks  bookmarks[]
+
+  @@index([user_idx], map: "FK_bookmark_folders_users")
+}
