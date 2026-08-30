@@ -1,3 +1,8 @@
+if (process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('dotenv/config');
+}
+
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors, { CorsOptions } from 'cors';

@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { Request, Response } from 'express';
 import { google } from 'googleapis';
 import { AuthRequest } from '../middleware/auth';

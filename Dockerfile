@@ -10,6 +10,7 @@ RUN apt-get update -y \
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 
+ENV NODE_ENV=development
 RUN npm ci
 
 COPY tsconfig.json ./
@@ -35,7 +36,6 @@ COPY package.json package-lock.json ./
 
 # dotenv is imported at runtime but lives in devDependencies
 RUN npm ci --omit=dev \
-  && npm install dotenv@^17.4.2 --omit=dev \
   && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist

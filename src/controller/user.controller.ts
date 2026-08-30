@@ -1,5 +1,4 @@
 //route에서 사용될 함수를 따로 관리 한다.
-import 'dotenv/config';
 import { Request, Response } from 'express';
 import { google } from 'googleapis';
 import jwt from 'jsonwebtoken';
