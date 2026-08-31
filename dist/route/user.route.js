@@ -16,7 +16,7 @@ router.post('/connect-calendar', auth_1.authMiddleware, rate_limit_1.writeLimite
 router.post('/disconnect-calendar', auth_1.authMiddleware, rate_limit_1.writeLimiter, user_controller_1.disconnectGoogleCalendar);
 router.post('/refresh', rate_limit_1.authLimiter, user_controller_1.refreshAccessToken);
 router.patch('/location', auth_1.authMiddleware, rate_limit_1.writeLimiter, user_controller_1.updateUserLocation);
-router.post('/logout', auth_1.authMiddleware, user_controller_1.logout);
+router.post('/logout', user_controller_1.logout);
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 1024 * 1024 },

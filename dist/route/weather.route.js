@@ -6,5 +6,6 @@ const auth_1 = require("../middleware/auth");
 const rate_limit_1 = require("../middleware/rate-limit");
 const router = (0, express_1.Router)();
 router.get('/suggest', auth_1.authMiddleware, rate_limit_1.weatherLimiter, weather_controller_1.suggestLocations);
+router.get('/guest', rate_limit_1.weatherLimiter, weather_controller_1.getGuestWeather);
 router.get('/', auth_1.authMiddleware, rate_limit_1.weatherLimiter, weather_controller_1.getWeather);
 exports.default = router;

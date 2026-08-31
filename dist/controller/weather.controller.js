@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.suggestLocations = exports.getWeather = void 0;
+exports.getGuestWeather = exports.suggestLocations = exports.getWeather = void 0;
 const CACHE_TTL_MS = 1000 * 60 * 15; // 15분
 const cache = new Map();
 const KNOWN_CITIES = {
@@ -86,8 +86,8 @@ async function geocodeKorea(query, count) {
     }
     return [];
 }
-const getWeather = async (req, res) => {
-    const city = String(req.query.city ?? '').trim();
+async function getWeatherForCity(cityInput, res) {
+    const city = cityInput.trim();
     if (!city) {
         res.status(400).json({ error: 'city is required' });
         return;
@@ -136,6 +136,9 @@ const getWeather = async (req, res) => {
     catch {
         res.status(502).json({ error: 'weather fetch failed' });
     }
+}
+const getWeather = async (req, res) => {
+    return getWeatherForCity(String(req.query.city ?? ''), res);
 };
 exports.getWeather = getWeather;
 const suggestLocations = async (req, res) => {
@@ -172,3 +175,8 @@ const suggestLocations = async (req, res) => {
     }
 };
 exports.suggestLocations = suggestLocations;
+/** 비로그인 사용자용 — 항상 서울 날씨 */
+const getGuestWeather = async (_req, res) => {
+    return getWeatherForCity('서울', res);
+};
+exports.getGuestWeather = getGuestWeather;

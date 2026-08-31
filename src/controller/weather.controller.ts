@@ -112,8 +112,8 @@ async function geocodeKorea(query: string, count: number): Promise<GeoResult[]> 
   return []
 }
 
-export const getWeather = async (req: Request, res: Response) => {
-  const city = String(req.query.city ?? '').trim();
+async function getWeatherForCity(cityInput: string, res: Response) {
+  const city = cityInput.trim();
   if (!city) {
     res.status(400).json({ error: 'city is required' });
     return;
@@ -128,54 +128,58 @@ export const getWeather = async (req: Request, res: Response) => {
   try {
     const known = KNOWN_CITIES[city];
     let place = known
-    ? { name: known.name, latitude: known.lat, longitude: known.lon }
-    : null;
+      ? { name: known.name, latitude: known.lat, longitude: known.lon }
+      : null;
 
     if (!place) {
-      const results = await geocodeKorea(city, 1)
-      const found = results[0]
+      const results = await geocodeKorea(city, 1);
+      const found = results[0];
       if (!found) {
-        res.status(404).json({ error: 'city not found' })
-        return
+        res.status(404).json({ error: 'city not found' });
+        return;
       }
       place = {
         name: found.name,
         latitude: found.latitude,
         longitude: found.longitude,
-      }
+      };
     }
 
     const wxRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul`
-      );
+      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul`,
+    );
     if (!wxRes.ok) {
       res.status(502).json({ error: 'forecast failed' });
       return;
     }
 
     const wx = (await wxRes.json()) as {
-        current: { temperature_2m: number; weather_code: number };
-        daily: {
-          temperature_2m_max: number[];
-          temperature_2m_min: number[];
-        };
+      current: { temperature_2m: number; weather_code: number };
+      daily: {
+        temperature_2m_max: number[];
+        temperature_2m_min: number[];
       };
-      
-      const mapped = mapWeatherCode(wx.current.weather_code);
-      const data: WeatherPayload = {
-        location: place.name,
-        condition: mapped.condition,
-        temp: Math.round(wx.current.temperature_2m),
-        high: Math.round(wx.daily.temperature_2m_max[0]),
-        low: Math.round(wx.daily.temperature_2m_min[0]),
-        desc: mapped.desc,
-      };
+    };
+
+    const mapped = mapWeatherCode(wx.current.weather_code);
+    const data: WeatherPayload = {
+      location: place.name,
+      condition: mapped.condition,
+      temp: Math.round(wx.current.temperature_2m),
+      high: Math.round(wx.daily.temperature_2m_max[0]),
+      low: Math.round(wx.daily.temperature_2m_min[0]),
+      desc: mapped.desc,
+    };
 
     cache.set(city, { at: Date.now(), data });
     res.json(data);
   } catch {
     res.status(502).json({ error: 'weather fetch failed' });
   }
+}
+
+export const getWeather = async (req: Request, res: Response) => {
+  return getWeatherForCity(String(req.query.city ?? ''), res);
 };
 
 type SuggestItem = {
@@ -224,7 +228,6 @@ export const suggestLocations = async (req: Request, res: Response) => {
 }
 
 /** 비로그인 사용자용 — 항상 서울 날씨 */
-export const getGuestWeather = async (req: Request, res: Response) => {
-  req.query.city = '서울';
-  return getWeather(req, res);
+export const getGuestWeather = async (_req: Request, res: Response) => {
+  return getWeatherForCity('서울', res);
 };

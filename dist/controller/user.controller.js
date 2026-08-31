@@ -4,8 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logout = exports.refreshAccessToken = exports.disconnectGoogleCalendar = exports.connectGoogleCalendar = exports.googleLogin = exports.updateUserLocation = exports.getMe = void 0;
-//route에서 사용될 함수를 따로 관리 한다.
-require("dotenv/config");
 const googleapis_1 = require("googleapis");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const calendar_cache_1 = require("../lib/calendar-cache");

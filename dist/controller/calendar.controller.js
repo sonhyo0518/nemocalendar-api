@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteEvent = exports.updateEvent = exports.createEvent = exports.getEvents = exports.getCalendars = void 0;
-require("dotenv/config");
 const googleapis_1 = require("googleapis");
 const prisma_1 = require("../lib/prisma");
 const colors_1 = require("../constants/colors");

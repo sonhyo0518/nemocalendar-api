@@ -14,6 +14,7 @@ function toAnniversary(row) {
         color: row.color ?? undefined,
     };
 }
+//기념일 조회
 const getAnniversaries = async (req, res) => {
     if (!req.userIdx) {
         res.status(401).json({ error: 'Unauthorized' });
