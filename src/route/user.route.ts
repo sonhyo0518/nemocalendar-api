@@ -26,7 +26,7 @@ router.post('/connect-calendar', authMiddleware, writeLimiter, connectGoogleCale
 router.post('/disconnect-calendar', authMiddleware, writeLimiter, disconnectGoogleCalendar);
 router.post('/refresh', authLimiter, refreshAccessToken);
 router.patch('/location', authMiddleware, writeLimiter, updateUserLocation);
-router.post('/logout', authMiddleware, logout);
+router.post('/logout', logout);
 
 const upload = multer({
   storage: multer.memoryStorage(),

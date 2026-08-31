@@ -223,3 +223,8 @@ export const suggestLocations = async (req: Request, res: Response) => {
   }
 }
 
+/** 비로그인 사용자용 — 항상 서울 날씨 */
+export const getGuestWeather = async (req: Request, res: Response) => {
+  req.query.city = '서울';
+  return getWeather(req, res);
+};
