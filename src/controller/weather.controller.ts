@@ -11,11 +11,16 @@ type WeatherPayload = {
     desc: string;
   };
 
-const CACHE_TTL_MS = 1000 * 60 * 15; // fresh: 15분
-const STALE_TTL_MS = 1000 * 60 * 60 * 6; // stale 허용: 6시간
-const FORECAST_RETRIES = 2; // 첫 시도 포함 총 3회면 2
+const CACHE_TTL_MS = 1000 * 60 * 60 * 2; // fresh: 2시간
+const STALE_TTL_MS = 1000 * 60 * 60 * 24; // stale: 24시간
+const FORECAST_RETRIES = 1; // 5xx/네트워크만 최대 1회 재시도
 const FORECAST_RETRY_MS = 400;
 const cache = new Map<string, { at: number; data: WeatherPayload }>();
+
+/** 같은 지역 중복 호출 방지 (서울/Seoul 등) */
+function coordKey(lat: number, lon: number) {
+  return `${lat.toFixed(2)},${lon.toFixed(2)}`;
+}
 
 const KNOWN_CITIES: Record<string, { name: string; lat: number; lon: number }> = {
     서울: { name: '서울', lat: 37.566, lon: 126.9784 },
@@ -137,8 +142,8 @@ async function fetchForecast(
         body.slice(0, 300),
       );
 
-      // 4xx 중 429만 재시도, 그 외 클라이언트 에러는 즉시 중단해도 됨
-      if (wxRes.status < 500 && wxRes.status !== 429) return null;
+      // 429·기타 4xx는 재시도하지 않음 (한도만 더 소모)
+      if (wxRes.status === 429 || wxRes.status < 500) return null;
     } catch (err) {
       console.error(
         `[weather] forecast fetch error attempt=${attempt + 1}`,
@@ -173,12 +178,14 @@ async function getWeatherForCity(cityInput: string, res: Response) {
     res.status(400).json({ error: 'city is required' });
     return;
   }
-  const cached = cache.get(city);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+
+  const cachedByCity = cache.get(city);
+  if (cachedByCity && Date.now() - cachedByCity.at < CACHE_TTL_MS) {
     res.setHeader('X-Weather-Cache', 'fresh');
-    res.json(cached.data);
+    res.json(cachedByCity.data);
     return;
   }
+
   try {
     const known = KNOWN_CITIES[city];
     let place = known
@@ -199,9 +206,19 @@ async function getWeatherForCity(cityInput: string, res: Response) {
       };
     }
 
+    const key = coordKey(place.latitude, place.longitude);
+    const cached = cache.get(key) ?? cachedByCity;
+
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+      cache.set(city, cached);
+      res.setHeader('X-Weather-Cache', 'fresh');
+      res.json(cached.data);
+      return;
+    }
+
     const wxRes = await fetchForecast(place.latitude, place.longitude);
     if (!wxRes) {
-      respondStaleOrFail(res, city, cached);
+      respondStaleOrFail(res, key, cached);
       return;
     }
 
@@ -223,12 +240,14 @@ async function getWeatherForCity(cityInput: string, res: Response) {
       desc: mapped.desc,
     };
 
-    cache.set(city, { at: Date.now(), data });
+    const entry = { at: Date.now(), data };
+    cache.set(key, entry);
+    cache.set(city, entry);
     res.setHeader('X-Weather-Cache', 'miss');
     res.json(data);
   } catch (err) {
     console.error('[weather] weather fetch failed', err);
-    respondStaleOrFail(res, city, cached);
+    respondStaleOrFail(res, city, cachedByCity);
   }
 }
 
