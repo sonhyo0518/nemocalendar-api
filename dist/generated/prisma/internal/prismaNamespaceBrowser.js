@@ -127,6 +127,10 @@ exports.UsersScalarFieldEnum = {
     profile_img_url: 'profile_img_url',
     banner_img_url: 'banner_img_url',
     google_refresh_token: 'google_refresh_token',
+    refresh_token_hash: 'refresh_token_hash',
+    refresh_prev_hash: 'refresh_prev_hash',
+    refresh_family: 'refresh_family',
+    refresh_rotated_at: 'refresh_rotated_at',
     created_at: 'created_at',
     updated_at: 'updated_at',
     theme_color: 'theme_color'
@@ -185,6 +189,9 @@ exports.usersOrderByRelevanceFieldEnum = {
     profile_img_url: 'profile_img_url',
     banner_img_url: 'banner_img_url',
     google_refresh_token: 'google_refresh_token',
+    refresh_token_hash: 'refresh_token_hash',
+    refresh_prev_hash: 'refresh_prev_hash',
+    refresh_family: 'refresh_family',
     theme_color: 'theme_color'
 };
 exports.todo_categoriesOrderByRelevanceFieldEnum = {

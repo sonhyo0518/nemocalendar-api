@@ -4,10 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.logout = exports.refreshAccessToken = exports.disconnectGoogleCalendar = exports.connectGoogleCalendar = exports.googleLogin = exports.updateUserLocation = exports.getMe = void 0;
+//route에서 사용될 함수를 따로 관리 한다.
+const crypto_1 = require("crypto");
 const googleapis_1 = require("googleapis");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const calendar_cache_1 = require("../lib/calendar-cache");
 const auth_cookies_1 = require("../lib/auth-cookies");
+const refresh_session_1 = require("../lib/refresh-session");
 const prisma_1 = require("../lib/prisma");
 const token_crypto_1 = require("../lib/token-crypto");
 const google_oauth_1 = require("../lib/google-oauth");
@@ -22,8 +25,13 @@ function getJwtSecret() {
 function signAccessToken(user) {
     return jsonwebtoken_1.default.sign({ userIdx: user.idx.toString(), email: user.email, type: 'access' }, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
 }
-function signRefreshToken(user) {
-    return jsonwebtoken_1.default.sign({ userIdx: user.idx.toString(), email: user.email, type: 'refresh' }, getJwtSecret(), { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
+function signRefreshToken(user, family) {
+    return jsonwebtoken_1.default.sign({
+        userIdx: user.idx.toString(),
+        email: user.email,
+        type: 'refresh',
+        fid: family,
+    }, getJwtSecret(), { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
 }
 async function exchangeCode(code) {
     const client = (0, google_oauth_1.createOAuthClient)();
@@ -141,13 +149,23 @@ const googleLogin = async (req, res) => {
         let refreshToken;
         try {
             accessToken = signAccessToken(user);
-            refreshToken = signRefreshToken(user);
+            // family를 먼저 정한 뒤 JWT·DB에 동일 값 사용
+            const family = (0, crypto_1.randomUUID)();
+            refreshToken = signRefreshToken(user, family);
+            await prisma_1.prisma.users.update({
+                where: { idx: user.idx },
+                data: {
+                    refresh_token_hash: (0, refresh_session_1.hashRefreshToken)(refreshToken),
+                    refresh_prev_hash: null,
+                    refresh_family: family,
+                    refresh_rotated_at: new Date(),
+                },
+            });
         }
         catch {
             res.status(500).json({ error: 'JWT_SECRET is not configured' });
             return;
         }
-        // 로그인 응답: refresh_token이 있어도 Calendar scope가 있어야 true
         let calendarConnected = false;
         const googleRefresh = (0, token_crypto_1.decryptSecret)(user.google_refresh_token);
         if (googleRefresh) {
@@ -249,11 +267,10 @@ const disconnectGoogleCalendar = async (req, res) => {
 exports.disconnectGoogleCalendar = disconnectGoogleCalendar;
 const refreshAccessToken = async (req, res) => {
     try {
+        // Cookie-only (body 허용 제거)
         const incomingRefreshToken = typeof req.cookies?.refreshToken === 'string'
             ? req.cookies.refreshToken
-            : typeof req.body?.refreshToken === 'string'
-                ? req.body.refreshToken
-                : '';
+            : '';
         if (!incomingRefreshToken) {
             res.status(400).json({ error: 'refreshToken is required' });
             return;
@@ -268,7 +285,7 @@ const refreshAccessToken = async (req, res) => {
             res.status(401).json({ error: 'Invalid or expired refresh token' });
             return;
         }
-        if (payload.type !== 'refresh') {
+        if (payload.type !== 'refresh' || !payload.fid) {
             res.status(401).json({ error: 'Invalid refresh token' });
             return;
         }
@@ -279,10 +296,72 @@ const refreshAccessToken = async (req, res) => {
             res.status(401).json({ error: 'Invalid refresh token' });
             return;
         }
-        const accessToken = signAccessToken(user);
-        const refreshToken = signRefreshToken(user);
-        (0, auth_cookies_1.setAuthCookies)(res, accessToken, refreshToken);
-        res.status(200).json({ message: 'Token refreshed' });
+        const incomingHash = (0, refresh_session_1.hashRefreshToken)(incomingRefreshToken);
+        // 1) 현재 토큰과 일치 → rotation
+        if (user.refresh_token_hash && incomingHash === user.refresh_token_hash) {
+            const family = user.refresh_family ?? payload.fid;
+            const accessToken = signAccessToken(user);
+            const refreshToken = signRefreshToken(user, family);
+            const newHash = (0, refresh_session_1.hashRefreshToken)(refreshToken);
+            // 원자적 교체: 동시에 두 탭이 오면 하나만 성공
+            const updated = await prisma_1.prisma.users.updateMany({
+                where: {
+                    idx: user.idx,
+                    refresh_token_hash: incomingHash,
+                },
+                data: {
+                    refresh_token_hash: newHash,
+                    refresh_prev_hash: incomingHash,
+                    refresh_family: family,
+                    refresh_rotated_at: new Date(),
+                },
+            });
+            if (updated.count === 1) {
+                (0, auth_cookies_1.setAuthCookies)(res, accessToken, refreshToken);
+                res.status(200).json({ message: 'Token refreshed' });
+                return;
+            }
+            // count=0 → 다른 탭이 이미 rotate. 아래로 fallthrough
+        }
+        // 최신 DB 재조회 (레이스 대비)
+        const latest = await prisma_1.prisma.users.findUnique({
+            where: { idx: user.idx },
+        });
+        if (!latest) {
+            (0, auth_cookies_1.clearAuthCookies)(res);
+            res.status(401).json({ error: 'Invalid refresh token' });
+            return;
+        }
+        // 2) grace: 직전 토큰 + 10초 이내 → access만 재발급 (refresh 재회전 금지)
+        if (latest.refresh_prev_hash &&
+            incomingHash === latest.refresh_prev_hash &&
+            (0, refresh_session_1.withinGrace)(latest.refresh_rotated_at) &&
+            latest.refresh_family === payload.fid) {
+            const accessToken = signAccessToken(latest);
+            // refresh 쿠키는 클라이언트가 이미 새 것을 가졌을 수 있음.
+            // 구 토큰으로 온 탭에는 access만 갱신. refresh는 건드리지 않음.
+            (0, auth_cookies_1.setAccessCookie)(res, accessToken);
+            res.status(200).json({ message: 'Token refreshed' });
+            return;
+        }
+        // 3) 재사용 탐지: 서명은 유효 + family 일치 + 현재/grace 불일치
+        if (latest.refresh_family &&
+            payload.fid === latest.refresh_family &&
+            incomingHash !== latest.refresh_token_hash) {
+            await prisma_1.prisma.users.update({
+                where: { idx: latest.idx },
+                data: (0, refresh_session_1.clearRefreshSession)(),
+            });
+            (0, auth_cookies_1.clearAuthCookies)(res);
+            res.status(401).json({
+                error: 'Refresh token reuse detected',
+                code: 'REFRESH_REUSE',
+            });
+            return;
+        }
+        // 4) DB에 세션 없음(재배포 직후 등) 또는 family 불일치
+        (0, auth_cookies_1.clearAuthCookies)(res);
+        res.status(401).json({ error: 'Invalid refresh token' });
     }
     catch (error) {
         console.error('Refresh Token Error:', error);
@@ -290,7 +369,48 @@ const refreshAccessToken = async (req, res) => {
     }
 };
 exports.refreshAccessToken = refreshAccessToken;
-const logout = async (_req, res) => {
+const logout = async (req, res) => {
+    const access = typeof req.cookies?.accessToken === 'string' ? req.cookies.accessToken : '';
+    const refresh = typeof req.cookies?.refreshToken === 'string' ? req.cookies.refreshToken : '';
+    let cleared = false;
+    // 1) access로 유저 식별 → 세션 폐기
+    if (access) {
+        try {
+            const payload = jsonwebtoken_1.default.verify(access, getJwtSecret(), {
+                algorithms: ['HS256'],
+            });
+            if (payload.type !== 'refresh' && payload.userIdx) {
+                await prisma_1.prisma.users.update({
+                    where: { idx: BigInt(payload.userIdx) },
+                    data: (0, refresh_session_1.clearRefreshSession)(),
+                });
+                cleared = true;
+            }
+        }
+        catch {
+            // access 만료 등 → refresh로 fallback
+        }
+    }
+    // 2) access 실패 시 refresh로 폐기 (path=/api/user 일 때만 도착)
+    if (!cleared && refresh) {
+        try {
+            const payload = jsonwebtoken_1.default.verify(refresh, getJwtSecret(), {
+                algorithms: ['HS256'],
+            });
+            if (payload.type === 'refresh' && payload.userIdx) {
+                await prisma_1.prisma.users.updateMany({
+                    where: {
+                        idx: BigInt(payload.userIdx),
+                        refresh_token_hash: (0, refresh_session_1.hashRefreshToken)(refresh),
+                    },
+                    data: (0, refresh_session_1.clearRefreshSession)(),
+                });
+            }
+        }
+        catch {
+            // ignore
+        }
+    }
     (0, auth_cookies_1.clearAuthCookies)(res);
     res.status(200).json({ message: 'Logged out' });
 };
