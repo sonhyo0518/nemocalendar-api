@@ -11,7 +11,10 @@ type WeatherPayload = {
     desc: string;
   };
 
-const CACHE_TTL_MS = 1000 * 60 * 15; // 15분
+const CACHE_TTL_MS = 1000 * 60 * 15; // fresh: 15분
+const STALE_TTL_MS = 1000 * 60 * 60 * 6; // stale 허용: 6시간
+const FORECAST_RETRIES = 2; // 첫 시도 포함 총 3회면 2
+const FORECAST_RETRY_MS = 400;
 const cache = new Map<string, { at: number; data: WeatherPayload }>();
 
 const KNOWN_CITIES: Record<string, { name: string; lat: number; lon: number }> = {
@@ -112,19 +115,70 @@ async function geocodeKorea(query: string, count: number): Promise<GeoResult[]> 
   return []
 }
 
+async function fetchForecast(
+  lat: number,
+  lon: number,
+): Promise<globalThis.Response | null> {
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,weather_code` +
+    `&daily=temperature_2m_max,temperature_2m_min` +
+    `&timezone=Asia/Seoul`;
+
+  for (let attempt = 0; attempt <= FORECAST_RETRIES; attempt++) {
+    try {
+      const wxRes = await fetch(url);
+      if (wxRes.ok) return wxRes;
+
+      const body = await wxRes.text().catch(() => '');
+      console.error(
+        `[weather] forecast upstream status=${wxRes.status} attempt=${attempt + 1}`,
+        body.slice(0, 300),
+      );
+
+      // 4xx 중 429만 재시도, 그 외 클라이언트 에러는 즉시 중단해도 됨
+      if (wxRes.status < 500 && wxRes.status !== 429) return null;
+    } catch (err) {
+      console.error(
+        `[weather] forecast fetch error attempt=${attempt + 1}`,
+        err,
+      );
+    }
+
+    if (attempt < FORECAST_RETRIES) {
+      await new Promise((r) => setTimeout(r, FORECAST_RETRY_MS * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
+function respondStaleOrFail(
+  res: Response,
+  city: string,
+  cached: { at: number; data: WeatherPayload } | undefined,
+) {
+  if (cached && Date.now() - cached.at < STALE_TTL_MS) {
+    console.warn(`[weather] serving stale cache city=${city}`);
+    res.setHeader('X-Weather-Cache', 'stale');
+    res.json(cached.data);
+    return;
+  }
+  res.status(502).json({ error: 'forecast failed' });
+}
+
 async function getWeatherForCity(cityInput: string, res: Response) {
   const city = cityInput.trim();
   if (!city) {
     res.status(400).json({ error: 'city is required' });
     return;
   }
-
   const cached = cache.get(city);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    res.setHeader('X-Weather-Cache', 'fresh');
     res.json(cached.data);
     return;
   }
-
   try {
     const known = KNOWN_CITIES[city];
     let place = known
@@ -145,11 +199,9 @@ async function getWeatherForCity(cityInput: string, res: Response) {
       };
     }
 
-    const wxRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul`,
-    );
-    if (!wxRes.ok) {
-      res.status(502).json({ error: 'forecast failed' });
+    const wxRes = await fetchForecast(place.latitude, place.longitude);
+    if (!wxRes) {
+      respondStaleOrFail(res, city, cached);
       return;
     }
 
@@ -172,9 +224,11 @@ async function getWeatherForCity(cityInput: string, res: Response) {
     };
 
     cache.set(city, { at: Date.now(), data });
+    res.setHeader('X-Weather-Cache', 'miss');
     res.json(data);
-  } catch {
-    res.status(502).json({ error: 'weather fetch failed' });
+  } catch (err) {
+    console.error('[weather] weather fetch failed', err);
+    respondStaleOrFail(res, city, cached);
   }
 }
 
