@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import jwt from 'jsonwebtoken';
 import { AuthRequest } from '../middleware/auth';
 import { invalidateCalCache } from '../lib/calendar-cache';
+import { Prisma } from '../generated/prisma/client';
 import { setAuthCookies, clearAuthCookies, setAccessCookie } from '../lib/auth-cookies';
 import {
   clearRefreshSession,
@@ -172,16 +173,32 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
     });
 
     if (!user) {
-      user = await prisma.users.create({
-        data: {
-          google_id: googleUser.id,
-          email: googleUser.email,
-          name: googleUser.name || '',
-          profile_img_url: googleUser.picture || null,
-          google_refresh_token: null,
-        },
-      });
-    } else {
+      try {
+        user = await prisma.users.create({
+          data: {
+            google_id: googleUser.id,
+            email: googleUser.email,
+            name: googleUser.name || '',
+            profile_img_url: googleUser.picture || null,
+            google_refresh_token: null,
+          },
+        });
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          user = await prisma.users.findUnique({
+            where: { google_id: googleUser.id },
+          });
+          if (!user) throw err;
+        } else {
+          throw err;
+        }
+      }
+    }
+    
+    if (user) {
       user = await prisma.users.update({
         where: { idx: user.idx },
         data: {
@@ -277,6 +294,15 @@ export const connectGoogleCalendar = async (
       return;
     }
 
+    const hasScope = await hasCalendarScope(tokens.refresh_token);
+    if (!hasScope) {
+      res.status(400).json({
+        error: 'Calendar scope was not granted',
+        code: 'MISSING_CALENDAR_SCOPE',
+      });
+      return;
+    }
+
     const user = await prisma.users.update({
       where: { idx: BigInt(req.userIdx) },
       data: {
@@ -312,11 +338,29 @@ export const disconnectGoogleCalendar = async (
       return;
     }
 
+    const existing = await prisma.users.findUnique({
+      where: { idx: BigInt(req.userIdx) },
+      select: { google_refresh_token: true },
+    });
+    
+    const rt = await resolveGoogleRefreshToken(
+      BigInt(req.userIdx),
+      existing?.google_refresh_token,
+    );
+    if (rt) {
+      try {
+        const oauth = createOAuthClient();
+        await oauth.revokeToken(rt);
+      } catch (err) {
+        console.error('[disconnect] Google revoke failed', err);
+      }
+    }
+    
     await prisma.users.update({
       where: { idx: BigInt(req.userIdx) },
       data: { google_refresh_token: null, updated_at: new Date() },
     });
-
+    
     invalidateCalCache(String(req.userIdx));
 
     res.status(200).json({

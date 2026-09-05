@@ -34,8 +34,8 @@ if (!raw) {
     const payload = jwt.verify(token, jwtSecret, {
       algorithms: ['HS256'],
     }) as { userIdx: string; email: string; type?: string };
-    
-    if (payload.type === 'refresh') {
+
+    if (payload.type !== 'access') {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }

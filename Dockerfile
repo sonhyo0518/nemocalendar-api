@@ -34,7 +34,7 @@ RUN apt-get update -y \
 
 COPY package.json package-lock.json ./
 
-# dotenv is imported at runtime but lives in devDependencies
+# Production: env is injected by the platform. dotenv loads only when NODE_ENV !== production
 RUN npm ci --omit=dev \
   && npm cache clean --force
 

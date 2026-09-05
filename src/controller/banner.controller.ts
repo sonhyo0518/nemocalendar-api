@@ -7,6 +7,31 @@ const MAX_BYTES = 1024 * 1024;
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+function sniffImageMime(
+  buf: Buffer,
+): 'image/jpeg' | 'image/png' | 'image/webp' | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+  if (
+    buf.length >= 12 &&
+    buf.toString('ascii', 0, 4) === 'RIFF' &&
+    buf.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
 function rgbToHex(r: number, g: number, b: number) {
   const h = (n: number) =>
     Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
@@ -56,7 +81,8 @@ export const uploadUserBanner = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'File must be 1MB or less' });
     return;
   }
-  if (!ALLOWED.has(file.mimetype)) {
+  const sniffed = sniffImageMime(file.buffer);
+  if (!sniffed || !ALLOWED.has(sniffed)) {
     res.status(400).json({ error: 'Only jpeg, png, webp are allowed' });
     return;
   }
@@ -71,9 +97,9 @@ export const uploadUserBanner = async (req: AuthRequest, res: Response) => {
   }
 
   const ext =
-    file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+    sniffed === 'image/png' ? 'png' : sniffed === 'image/webp' ? 'webp' : 'jpg';
   const key = `banners/${req.userIdx}/${randomUUID()}.${ext}`;
-  const url = await uploadBanner(key, file.buffer, file.mimetype);
+  const url = await uploadBanner(key, file.buffer, sniffed);
 
   const user = await prisma.users.update({
     where: { idx: BigInt(req.userIdx) },

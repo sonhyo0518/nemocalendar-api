@@ -46,10 +46,18 @@ async function listEventsInRange(
 }
 
 
+const MAX_EVENT_RANGE_DAYS = 62;
+
 function parseRangeQuery(fromRaw: unknown, toRaw: unknown) {
   const from = typeof fromRaw === "string" && isDateKey(fromRaw) ? fromRaw : null;
   const to = typeof toRaw === "string" && isDateKey(toRaw) ? toRaw : null;
   if (!from || !to || to < from) return null;
+
+  const fromUtc = Date.parse(`${from}T00:00:00Z`);
+  const toUtc = Date.parse(`${to}T00:00:00Z`);
+  const days = Math.round((toUtc - fromUtc) / 86_400_000);
+  if (days > MAX_EVENT_RANGE_DAYS) return null;
+
   return {
     from,
     to,
@@ -357,7 +365,9 @@ export const getEvents = async (
 
     const range = parseRangeQuery(req.query.from, req.query.to);
       if (!range) {
-        res.status(400).json({ error: "from and to (yyyy-mm-dd) required" });
+        res.status(400).json({
+          error: `from and to (yyyy-mm-dd) required; max range ${MAX_EVENT_RANGE_DAYS} days`,
+        });
         return;
       }
 
