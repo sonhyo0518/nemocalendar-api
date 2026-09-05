@@ -20,6 +20,8 @@ const calendar_route_1 = __importDefault(require("./route/calendar.route"));
 const bookmark_route_1 = __importDefault(require("./route/bookmark.route"));
 const bookmark_folder_route_1 = __importDefault(require("./route/bookmark-folder.route"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const prisma_1 = require("./lib/prisma");
+const csrf_1 = require("./middleware/csrf");
 const app = (0, express_1.default)();
 const port = Number(process.env.PORT ?? 5000);
 app.set('trust proxy', 1);
@@ -42,8 +44,19 @@ app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json({ limit: '100kb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, cookie_parser_1.default)());
+app.use((0, csrf_1.createCsrfMiddleware)(allowedOrigins));
 app.get('/', (req, res) => {
     res.send('Hello, TypeScript with Express!');
+});
+app.get('/health', async (_req, res) => {
+    try {
+        await prisma_1.prisma.$queryRaw `SELECT 1`;
+        res.status(200).json({ ok: true, db: true });
+    }
+    catch (err) {
+        console.error('[health]', err);
+        res.status(503).json({ ok: false, db: false });
+    }
 });
 app.use('/api/user', user_route_1.default);
 app.use('/api/pins', pin_route_1.default);

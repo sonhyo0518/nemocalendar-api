@@ -1,8 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getGuestWeather = exports.suggestLocations = exports.getWeather = void 0;
-const CACHE_TTL_MS = 1000 * 60 * 15; // 15분
+const CACHE_TTL_MS = 1000 * 60 * 60 * 2; // fresh: 2시간
+const STALE_TTL_MS = 1000 * 60 * 60 * 24; // stale: 24시간
+const FORECAST_RETRIES = 1; // 5xx/네트워크만 최대 1회 재시도
+const FORECAST_RETRY_MS = 400;
 const cache = new Map();
+/** 같은 지역 중복 호출 방지 (서울/Seoul 등) */
+function coordKey(lat, lon) {
+    return `${lat.toFixed(2)},${lon.toFixed(2)}`;
+}
 const KNOWN_CITIES = {
     서울: { name: '서울', lat: 37.566, lon: 126.9784 },
     부산: { name: '부산', lat: 35.10168, lon: 129.03004 },
@@ -86,15 +93,51 @@ async function geocodeKorea(query, count) {
     }
     return [];
 }
+async function fetchForecast(lat, lon) {
+    const url = `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${lat}&longitude=${lon}` +
+        `&current=temperature_2m,weather_code` +
+        `&daily=temperature_2m_max,temperature_2m_min` +
+        `&timezone=Asia/Seoul`;
+    for (let attempt = 0; attempt <= FORECAST_RETRIES; attempt++) {
+        try {
+            const wxRes = await fetch(url);
+            if (wxRes.ok)
+                return wxRes;
+            const body = await wxRes.text().catch(() => '');
+            console.error(`[weather] forecast upstream status=${wxRes.status} attempt=${attempt + 1}`, body.slice(0, 300));
+            // 429·기타 4xx는 재시도하지 않음 (한도만 더 소모)
+            if (wxRes.status === 429 || wxRes.status < 500)
+                return null;
+        }
+        catch (err) {
+            console.error(`[weather] forecast fetch error attempt=${attempt + 1}`, err);
+        }
+        if (attempt < FORECAST_RETRIES) {
+            await new Promise((r) => setTimeout(r, FORECAST_RETRY_MS * (attempt + 1)));
+        }
+    }
+    return null;
+}
+function respondStaleOrFail(res, city, cached) {
+    if (cached && Date.now() - cached.at < STALE_TTL_MS) {
+        console.warn(`[weather] serving stale cache city=${city}`);
+        res.setHeader('X-Weather-Cache', 'stale');
+        res.json(cached.data);
+        return;
+    }
+    res.status(502).json({ error: 'forecast failed' });
+}
 async function getWeatherForCity(cityInput, res) {
     const city = cityInput.trim();
     if (!city) {
         res.status(400).json({ error: 'city is required' });
         return;
     }
-    const cached = cache.get(city);
-    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-        res.json(cached.data);
+    const cachedByCity = cache.get(city);
+    if (cachedByCity && Date.now() - cachedByCity.at < CACHE_TTL_MS) {
+        res.setHeader('X-Weather-Cache', 'fresh');
+        res.json(cachedByCity.data);
         return;
     }
     try {
@@ -115,9 +158,17 @@ async function getWeatherForCity(cityInput, res) {
                 longitude: found.longitude,
             };
         }
-        const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul`);
-        if (!wxRes.ok) {
-            res.status(502).json({ error: 'forecast failed' });
+        const key = coordKey(place.latitude, place.longitude);
+        const cached = cache.get(key) ?? cachedByCity;
+        if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+            cache.set(city, cached);
+            res.setHeader('X-Weather-Cache', 'fresh');
+            res.json(cached.data);
+            return;
+        }
+        const wxRes = await fetchForecast(place.latitude, place.longitude);
+        if (!wxRes) {
+            respondStaleOrFail(res, key, cached);
             return;
         }
         const wx = (await wxRes.json());
@@ -130,11 +181,15 @@ async function getWeatherForCity(cityInput, res) {
             low: Math.round(wx.daily.temperature_2m_min[0]),
             desc: mapped.desc,
         };
-        cache.set(city, { at: Date.now(), data });
+        const entry = { at: Date.now(), data };
+        cache.set(key, entry);
+        cache.set(city, entry);
+        res.setHeader('X-Weather-Cache', 'miss');
         res.json(data);
     }
-    catch {
-        res.status(502).json({ error: 'weather fetch failed' });
+    catch (err) {
+        console.error('[weather] weather fetch failed', err);
+        respondStaleOrFail(res, city, cachedByCity);
     }
 }
 const getWeather = async (req, res) => {

@@ -13,6 +13,7 @@ const auth_cookies_1 = require("../lib/auth-cookies");
 const refresh_session_1 = require("../lib/refresh-session");
 const prisma_1 = require("../lib/prisma");
 const token_crypto_1 = require("../lib/token-crypto");
+const google_refresh_1 = require("../lib/google-refresh");
 const google_oauth_1 = require("../lib/google-oauth");
 const ACCESS_TOKEN_EXPIRES_IN = '1h';
 const REFRESH_TOKEN_EXPIRES_IN = '7d';
@@ -43,7 +44,11 @@ async function hasCalendarScope(refreshToken) {
     const { token } = await client.getAccessToken();
     if (!token)
         return false;
-    const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${token}`);
+    const infoRes = await fetch('https://oauth2.googleapis.com/tokeninfo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ access_token: token }),
+    });
     if (!infoRes.ok)
         return false;
     const info = (await infoRes.json());
@@ -61,7 +66,7 @@ const getMe = async (req, res) => {
         return;
     }
     let calendarConnected = false;
-    const googleRefresh = (0, token_crypto_1.decryptSecret)(user.google_refresh_token);
+    const googleRefresh = await (0, google_refresh_1.resolveGoogleRefreshToken)(user.idx, user.google_refresh_token);
     if (googleRefresh) {
         try {
             calendarConnected = await hasCalendarScope(googleRefresh);
@@ -167,7 +172,7 @@ const googleLogin = async (req, res) => {
             return;
         }
         let calendarConnected = false;
-        const googleRefresh = (0, token_crypto_1.decryptSecret)(user.google_refresh_token);
+        const googleRefresh = await (0, google_refresh_1.resolveGoogleRefreshToken)(user.idx, user.google_refresh_token);
         if (googleRefresh) {
             try {
                 calendarConnected = await hasCalendarScope(googleRefresh);

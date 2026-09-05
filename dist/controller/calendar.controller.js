@@ -5,11 +5,11 @@ const googleapis_1 = require("googleapis");
 const prisma_1 = require("../lib/prisma");
 const colors_1 = require("../constants/colors");
 const date_key_1 = require("../utils/date-key");
-const token_crypto_1 = require("../lib/token-crypto");
+const google_refresh_1 = require("../lib/google-refresh");
 const calendar_cache_1 = require("../lib/calendar-cache");
 const google_oauth_1 = require("../lib/google-oauth");
-function getGoogleRefreshToken(stored) {
-    return (0, token_crypto_1.decryptSecret)(stored);
+async function getGoogleRefreshToken(userIdx, stored) {
+    return (0, google_refresh_1.resolveGoogleRefreshToken)(userIdx, stored);
 }
 async function listEventsInRange(calendar, calendarId, timeMin, timeMax) {
     const items = [];
@@ -237,7 +237,7 @@ const getCalendars = async (req, res) => {
         const user = await prisma_1.prisma.users.findUnique({
             where: { idx: BigInt(req.userIdx) },
         });
-        const rt = getGoogleRefreshToken(user?.google_refresh_token);
+        const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
         if (!rt) {
             res.status(403).json({
                 error: 'Calendar permission required',
@@ -266,7 +266,7 @@ const getEvents = async (req, res) => {
         const user = await prisma_1.prisma.users.findUnique({
             where: { idx: BigInt(req.userIdx) },
         });
-        const rt = getGoogleRefreshToken(user?.google_refresh_token);
+        const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
         if (!rt) {
             res.status(403).json({
                 error: 'Calendar permission required',
@@ -333,7 +333,7 @@ const createEvent = async (req, res) => {
         const user = await prisma_1.prisma.users.findUnique({
             where: { idx: BigInt(req.userIdx) },
         });
-        const rt = getGoogleRefreshToken(user?.google_refresh_token);
+        const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
         if (!rt) {
             res.status(400).json({
                 error: 'Google calendar not connected. Please log in again.',
@@ -404,7 +404,7 @@ const updateEvent = async (req, res) => {
         const user = await prisma_1.prisma.users.findUnique({
             where: { idx: BigInt(req.userIdx) },
         });
-        const rt = getGoogleRefreshToken(user?.google_refresh_token);
+        const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
         if (!rt) {
             res.status(400).json({
                 error: 'Google calendar not connected. Please log in again.',
@@ -485,7 +485,7 @@ const deleteEvent = async (req, res) => {
         const user = await prisma_1.prisma.users.findUnique({
             where: { idx: BigInt(req.userIdx) },
         });
-        const rt = getGoogleRefreshToken(user?.google_refresh_token);
+        const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
         if (!rt) {
             res.status(400).json({
                 error: 'Google calendar not connected. Please log in again.',

@@ -24,11 +24,17 @@ export function encryptSecret(plain: string): string {
   return `${PREFIX}${iv.toString('base64url')}.${tag.toString('base64url')}.${encrypted.toString('base64url')}`;
 }
 
-export function decryptSecret(stored: string | null | undefined): string | null {
+export type UnwrappedSecret = {
+  plain: string;
+  needsReencrypt: boolean;
+};
+
+export function unwrapSecret(
+  stored: string | null | undefined,
+): UnwrappedSecret | null {
   if (!stored) return null;
   if (!stored.startsWith(PREFIX)) {
-    // 마이그레이션: 기존 평문 token (점진적 제거 가능)
-    return stored;
+    return { plain: stored, needsReencrypt: true };
   }
   try {
     const body = stored.slice(PREFIX.length);
@@ -39,8 +45,16 @@ export function decryptSecret(stored: string | null | undefined): string | null 
     const data = Buffer.from(dataB64, 'base64url');
     const decipher = createDecipheriv(ALGO, getKey(), iv);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+    const plain = Buffer.concat([
+      decipher.update(data),
+      decipher.final(),
+    ]).toString('utf8');
+    return { plain, needsReencrypt: false };
   } catch {
     return null;
   }
+}
+
+export function decryptSecret(stored: string | null | undefined): string | null {
+  return unwrapSecret(stored)?.plain ?? null;
 }

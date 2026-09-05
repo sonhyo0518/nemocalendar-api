@@ -4,7 +4,8 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { DEFAULT_BANNER_COLOR } from '../constants/colors';
 import { extractDateKey, isDateKey } from '../utils/date-key';
-import { decryptSecret } from '../lib/token-crypto';
+import { resolveGoogleRefreshToken } from '../lib/google-refresh';
+
 import {
   invalidateCalCache,
   readCalCache,
@@ -12,8 +13,11 @@ import {
 } from '../lib/calendar-cache';
 import { createOAuthClient } from '../lib/google-oauth';
 
-function getGoogleRefreshToken(stored: string | null | undefined): string | null {
-  return decryptSecret(stored);
+async function getGoogleRefreshToken(
+  userIdx: bigint,
+  stored: string | null | undefined,
+): Promise<string | null> {
+  return resolveGoogleRefreshToken(userIdx, stored);
 }
 
 async function listEventsInRange(
@@ -309,7 +313,7 @@ export const getCalendars = async (
       where: { idx: BigInt(req.userIdx) },
     });
 
-    const rt = getGoogleRefreshToken(user?.google_refresh_token);
+    const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token);
     if (!rt) {
       res.status(403).json({
         error: 'Calendar permission required',
@@ -342,7 +346,7 @@ export const getEvents = async (
       where: { idx: BigInt(req.userIdx) },
     });
 
-    const rt = getGoogleRefreshToken(user?.google_refresh_token); 
+    const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
       res.status(403).json({
         error: 'Calendar permission required',
@@ -438,7 +442,7 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       where: { idx: BigInt(req.userIdx) },
     });
 
-    const rt = getGoogleRefreshToken(user?.google_refresh_token); 
+    const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
       res.status(400).json({
         error: 'Google calendar not connected. Please log in again.',
@@ -533,7 +537,7 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       where: { idx: BigInt(req.userIdx) },
     });
     
-    const rt = getGoogleRefreshToken(user?.google_refresh_token); 
+    const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
       res.status(400).json({
         error: 'Google calendar not connected. Please log in again.',
@@ -627,7 +631,7 @@ export const deleteEvent = async (req: AuthRequest, res: Response): Promise<void
       where: { idx: BigInt(req.userIdx) },
     });
 
-    const rt = getGoogleRefreshToken(user?.google_refresh_token); 
+    const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
       res.status(400).json({
         error: 'Google calendar not connected. Please log in again.',

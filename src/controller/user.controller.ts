@@ -13,7 +13,8 @@ import {
 } from '../lib/refresh-session';
 
 import { prisma } from '../lib/prisma';
-import { decryptSecret, encryptSecret } from '../lib/token-crypto';
+import { encryptSecret } from '../lib/token-crypto';
+import { resolveGoogleRefreshToken } from '../lib/google-refresh';
 import { createOAuthClient } from '../lib/google-oauth';
 
 const ACCESS_TOKEN_EXPIRES_IN = '1h' as const;
@@ -68,9 +69,11 @@ async function hasCalendarScope(refreshToken: string): Promise<boolean> {
   const { token } = await client.getAccessToken();
   if (!token) return false;
 
-  const infoRes = await fetch(
-    `https://oauth2.googleapis.com/tokeninfo?access_token=${token}`
-  );
+  const infoRes = await fetch('https://oauth2.googleapis.com/tokeninfo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ access_token: token }),
+  });
   if (!infoRes.ok) return false;
 
   const info = (await infoRes.json()) as { scope?: string };
@@ -93,7 +96,10 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   }
 
   let calendarConnected = false;
-  const googleRefresh = decryptSecret(user.google_refresh_token);
+  const googleRefresh = await resolveGoogleRefreshToken(
+    user.idx,
+    user.google_refresh_token,
+  );
   if (googleRefresh) {
     try {
       calendarConnected = await hasCalendarScope(googleRefresh);
@@ -209,7 +215,10 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
     }
 
     let calendarConnected = false;
-    const googleRefresh = decryptSecret(user.google_refresh_token);
+    const googleRefresh = await resolveGoogleRefreshToken(
+      user.idx,
+      user.google_refresh_token,
+    );
     if (googleRefresh) {
       try {
         calendarConnected = await hasCalendarScope(googleRefresh);

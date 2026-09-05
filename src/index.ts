@@ -17,6 +17,7 @@ import bookmarkRoutes from './route/bookmark.route';
 import bookmarkFolderRoutes from './route/bookmark-folder.route';
 import cookieParser from 'cookie-parser';
 import { prisma } from './lib/prisma';
+import { createCsrfMiddleware } from './middleware/csrf';
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
@@ -42,6 +43,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(createCsrfMiddleware(allowedOrigins));
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, TypeScript with Express!');

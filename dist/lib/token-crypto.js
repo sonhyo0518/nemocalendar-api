@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.encryptSecret = encryptSecret;
+exports.unwrapSecret = unwrapSecret;
 exports.decryptSecret = decryptSecret;
 const crypto_1 = require("crypto");
 const ALGO = 'aes-256-gcm';
@@ -24,12 +25,11 @@ function encryptSecret(plain) {
     const tag = cipher.getAuthTag();
     return `${PREFIX}${iv.toString('base64url')}.${tag.toString('base64url')}.${encrypted.toString('base64url')}`;
 }
-function decryptSecret(stored) {
+function unwrapSecret(stored) {
     if (!stored)
         return null;
     if (!stored.startsWith(PREFIX)) {
-        // 마이그레이션: 기존 평문 token (점진적 제거 가능)
-        return stored;
+        return { plain: stored, needsReencrypt: true };
     }
     try {
         const body = stored.slice(PREFIX.length);
@@ -41,9 +41,16 @@ function decryptSecret(stored) {
         const data = Buffer.from(dataB64, 'base64url');
         const decipher = (0, crypto_1.createDecipheriv)(ALGO, getKey(), iv);
         decipher.setAuthTag(tag);
-        return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+        const plain = Buffer.concat([
+            decipher.update(data),
+            decipher.final(),
+        ]).toString('utf8');
+        return { plain, needsReencrypt: false };
     }
     catch {
         return null;
     }
+}
+function decryptSecret(stored) {
+    return unwrapSecret(stored)?.plain ?? null;
 }
