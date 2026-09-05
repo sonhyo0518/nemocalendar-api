@@ -16,6 +16,7 @@ import calendarRoutes from './route/calendar.route';
 import bookmarkRoutes from './route/bookmark.route';
 import bookmarkFolderRoutes from './route/bookmark-folder.route';
 import cookieParser from 'cookie-parser';
+import { prisma } from './lib/prisma';
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
@@ -44,6 +45,16 @@ app.use(cookieParser());
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, TypeScript with Express!');
+});
+
+app.get('/health', async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ ok: true, db: true });
+  } catch (err) {
+    console.error('[health]', err);
+    res.status(503).json({ ok: false, db: false });
+  }
 });
 
 app.use('/api/user', userRoutes);
