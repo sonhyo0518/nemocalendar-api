@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import {
   connectGoogleCalendar,
+  deleteAccount,
   disconnectGoogleCalendar,
   getMe,
   googleLogin,
@@ -24,6 +25,7 @@ router.post('/google-login', authLimiter, googleLogin);
 router.get('/me', authMiddleware, getMe);
 router.post('/connect-calendar', authMiddleware, writeLimiter, connectGoogleCalendar);
 router.post('/disconnect-calendar', authMiddleware, writeLimiter, disconnectGoogleCalendar);
+router.delete('/account', authMiddleware, writeLimiter, deleteAccount);
 router.post('/refresh', authLimiter, refreshAccessToken);
 router.patch('/location', authMiddleware, writeLimiter, updateUserLocation);
 router.post('/logout', logout);

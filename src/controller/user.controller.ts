@@ -14,6 +14,7 @@ import {
 } from '../lib/refresh-session';
 
 import { prisma } from '../lib/prisma';
+import { deleteBannerByUrl } from '../lib/r2';
 import { encryptSecret } from '../lib/token-crypto';
 import { resolveGoogleRefreshToken } from '../lib/google-refresh';
 import { createOAuthClient } from '../lib/google-oauth';
@@ -370,6 +371,58 @@ export const disconnectGoogleCalendar = async (
   } catch (error) {
     console.error('Disconnect Calendar Error:', error);
     res.status(500).json({ error: 'Failed to disconnect Google Calendar' });
+  }
+};
+
+export const deleteAccount = async (
+  req: AuthRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    if (!req.userIdx) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const userIdx = BigInt(req.userIdx);
+    const existing = await prisma.users.findUnique({
+      where: { idx: userIdx },
+      select: { google_refresh_token: true, banner_img_url: true },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const rt = await resolveGoogleRefreshToken(
+      userIdx,
+      existing.google_refresh_token,
+    );
+    if (rt) {
+      try {
+        const oauth = createOAuthClient();
+        await oauth.revokeToken(rt);
+      } catch (err) {
+        console.error('[deleteAccount] Google revoke failed', err);
+      }
+    }
+
+    try {
+      await deleteBannerByUrl(existing.banner_img_url);
+    } catch (err) {
+      console.error('[deleteAccount] R2 delete failed', err);
+    }
+
+    invalidateCalCache(String(req.userIdx));
+
+    await prisma.users.delete({ where: { idx: userIdx } });
+
+    clearAuthCookies(res);
+    res.status(200).json({ message: 'Account deleted' });
+  } catch (error) {
+    console.error('Delete Account Error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 };
 
