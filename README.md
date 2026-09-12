@@ -58,6 +58,9 @@ TOKEN_ENCRYPTION_KEY=""
 CORS_ORIGINS="http://localhost:3000"
 PORT=5000
 
+# WeatherAPI.com (날씨 위젯)
+WEATHER_API_KEY=""
+
 # Cloudflare R2 (배너 이미지)
 R2_ACCOUNT_ID=""
 R2_BUCKET_NAME=""
@@ -198,12 +201,13 @@ npx prisma generate     # Prisma Client 생성 (src/generated/prisma)
 
 ### Weather `/api/weather`
 
-인증 필요.
+WeatherAPI.com 프록시. `WEATHER_API_KEY` 필요. in-memory 캐시(fresh 2h / stale 24h).
 
-| Method | Path | 설명 |
-| --- | --- | --- |
-| GET | `/` | 날씨 조회. `?city=...` |
-| GET | `/suggest` | 지역 자동완성. `?q=...` |
+| Method | Path | 인증 | 설명 |
+| --- | --- | --- | --- |
+| GET | `/` | 필요 | 날씨 조회. `?city=...` |
+| GET | `/suggest` | 필요 | 지역 자동완성. `?q=...` |
+| GET | `/guest` | 없음 | 비로그인용 서울 날씨 |
 
 ## 프로젝트 구조
 
