@@ -228,6 +228,12 @@ prisma/
   schema.prisma
 ```
 
+## 버전·릴리즈
+
+앱 버전은 frontend와 동일한 SemVer를 씁니다. Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
+
+→ [RELEASE.md](./RELEASE.md)
+
 ## 의존성
 
 패키지 목록은 `package.json`을 기준으로 설치하세요.
