@@ -24,12 +24,14 @@ NemoCalendar의 Express + TypeScript API 서버입니다. Google OAuth 로그인
 
 ```bash
 npm install
-npx prisma db pull
 npx prisma generate
+npm run db:migrate
 npm run dev
 ```
 
 서버가 뜨면 `http://localhost:5000` 에서 `Hello, TypeScript with Express!` 를 확인할 수 있습니다.
+
+빈 DB라면 `db:migrate`가 `prisma/migrations`의 SQL을 적용합니다. 이미 스키마가 있는 DB(예: 기존 TiDB)는 baseline이 `resolve --applied`된 상태여야 하며, `npm run db:status`로 확인합니다.
 
 ### 스크립트
 
@@ -38,6 +40,10 @@ npm run dev
 | `npm run dev` | 개발 서버 (`tsx watch`) |
 | `npm run build` | TypeScript 빌드 (`dist/`) |
 | `npm start` | 빌드된 서버 실행 |
+| `npm run db:migrate` | pending migration 적용 (`migrate deploy`) |
+| `npm run db:migrate:dev` | 스키마 변경 → migration 생성·적용 (로컬) |
+| `npm run db:status` | migration 상태 |
+| `npm run db:generate` | Prisma Client 생성 |
 
 ## 환경 변수
 
@@ -71,12 +77,20 @@ R2_SECRET_ACCESS_KEY=""
 
 ## Prisma
 
-스키마는 기존 MySQL DB를 introspect 한 결과입니다. DB 변경 후 스키마를 다시 가져오는 흐름입니다.
+스키마 소스는 `prisma/schema.prisma`이며, 변경은 **migration**으로만 반영합니다. (`db push`는 사용하지 않음)
 
 ```bash
-npx prisma db pull      # DB → prisma/schema.prisma
-npx prisma generate     # Prisma Client 생성 (src/generated/prisma)
+# 로컬에서 스키마 수정 후
+npm run db:migrate:dev -- --name add_something
+
+# 공유/프로덕션 DB
+npm run db:migrate          # migrate deploy
+npm run db:status
+
+npx prisma generate         # 또는 npm run db:generate
 ```
+
+일회성 introspect가 필요할 때만 `npx prisma db pull`을 쓰고, 결과는 리뷰 후 migration으로 정리합니다.
 
 주요 모델: `users`, `todos`, `todo_categories`, `pins`, `anniversaries`, `bookmarks`, `bookmark_folders`
 
@@ -226,6 +240,7 @@ src/
   generated/prisma/        # prisma generate 결과
 prisma/
   schema.prisma
+  migrations/              # Prisma Migrate (baseline: 0_init)
 ```
 
 ## 버전·릴리즈
