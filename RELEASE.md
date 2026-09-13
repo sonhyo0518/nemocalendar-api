@@ -15,8 +15,10 @@ Nemo Calendar는 **앱 단위 단일 SemVer**를 씁니다.
 
 ## 이 레포에서 할 일 (요약)
 
-1. frontend와 같은 `X.Y.Z`로 `package.json` / `package-lock.json` 루트 version을 맞춘다.
+frontend 릴리즈(CHANGELOG·tag)가 끝난 뒤, **같은 `X.Y.Z`** 로 맞춘다.
+
+1. `package.json` / `package-lock.json` 루트 `"version"`을 frontend와 동일하게 둔다.
 2. `chore(release): vX.Y.Z` 커밋 후 annotated tag `vX.Y.Z` (`-m "Release vX.Y.Z"`)를 단다.
 3. `git push origin HEAD` 및 `git push origin vX.Y.Z`.
 
-상세 체크리스트는 frontend [VERSIONING.md](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/VERSIONING.md)를 따릅니다.
+전체 순서·확인 명령은 frontend [VERSIONING.md — 듀얼 레포 릴리즈 절차](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/VERSIONING.md)를 따른다.
