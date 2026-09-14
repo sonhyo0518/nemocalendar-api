@@ -284,8 +284,9 @@ export const connectGoogleCalendar = async (
       return;
     }
 
-    const { tokens } = await exchangeCode(code);
-
+    const { client, tokens } = await exchangeCode(code);
+    client.setCredentials(tokens);
+    
     if (!tokens.refresh_token) {
       res.status(400).json({
         error:
@@ -294,7 +295,23 @@ export const connectGoogleCalendar = async (
       });
       return;
     }
-
+    
+    const oauth2 = google.oauth2({ version: 'v2', auth: client });
+    const { data: googleUser } = await oauth2.userinfo.get();
+    
+    const me = await prisma.users.findUnique({
+      where: { idx: BigInt(req.userIdx) },
+      select: { google_id: true },
+    });
+    
+    if (!googleUser.id || !me || googleUser.id !== me.google_id) {
+      res.status(403).json({
+        error: 'Google account does not match the signed-in user',
+        code: 'GOOGLE_ACCOUNT_MISMATCH',
+      });
+      return;
+    }
+    
     const hasScope = await hasCalendarScope(tokens.refresh_token);
     if (!hasScope) {
       res.status(400).json({
@@ -303,7 +320,7 @@ export const connectGoogleCalendar = async (
       });
       return;
     }
-
+    
     const user = await prisma.users.update({
       where: { idx: BigInt(req.userIdx) },
       data: {

@@ -92,6 +92,43 @@ export type OgMeta = {
     return m?.[1]?.trim() || null;
   }
   
+  const MAX_OG_BYTES = 100_000;
+
+  async function readCappedText(
+    res: globalThis.Response,
+    maxBytes: number,
+  ): Promise<string> {
+    const lenHeader = res.headers.get('content-length');
+    if (lenHeader) {
+      const len = Number(lenHeader);
+      if (Number.isFinite(len) && len > maxBytes) {
+        throw new Error('body too large');
+      }
+    }
+
+    if (!res.body) {
+      return '';
+    }
+
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error('body too large');
+      }
+      chunks.push(value);
+    }
+
+    return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8');
+  }
+
   /** URL HTML을 읽어 OG/기본 메타를 반환. 실패 시 전부 null. */
   export async function fetchOgMeta(pageUrl: string): Promise<OgMeta> {
     const empty: OgMeta = {
@@ -145,7 +182,7 @@ export type OgMeta = {
       clearTimeout(timer);
       if (!res || !res.ok) return empty;
   
-      const html = (await res.text()).slice(0, 80_000);
+      const html = await readCappedText(res, MAX_OG_BYTES);
       const finalUrl = current.toString();
   
       const title = metaContent(html, 'og:title') || pageTitle(html);

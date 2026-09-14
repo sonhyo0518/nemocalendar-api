@@ -35,6 +35,19 @@ function isHttpUrl(raw: string) {
   }
 }
 
+/** null 허용. 값이 있으면 http(s)만 통과, 아니면 400용 Error */
+function optionalHttpUrl(raw: unknown): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (!isHttpUrl(s)) {
+    const err = new Error('invalid media url') as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+  return s;
+}
+
 function defaultTitle(url: string) {
   try {
     return new URL(url).hostname;
@@ -72,14 +85,17 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
     req.body?.description == null
       ? null
       : String(req.body.description).trim() || null;
-  let favicon_url =
-    req.body?.faviconUrl == null
-      ? null
-      : String(req.body.faviconUrl).trim() || null;
-  let preview_image_url =
-    req.body?.previewImageUrl == null
-      ? null
-      : String(req.body.previewImageUrl).trim() || null;
+      let favicon_url: string | null;
+      let preview_image_url: string | null;
+      try {
+        favicon_url = optionalHttpUrl(req.body?.faviconUrl);
+        preview_image_url = optionalHttpUrl(req.body?.previewImageUrl);
+      } catch {
+        res.status(400).json({
+          error: 'faviconUrl and previewImageUrl must be http(s) URLs',
+        });
+        return;
+      }
 
       let folder_idx: bigint | null = null;
       if (req.body?.folderId != null && req.body.folderId !== '') {
@@ -103,6 +119,11 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
   if (!description) description = og.description;
   if (!favicon_url) favicon_url = og.faviconUrl;
   if (!preview_image_url) preview_image_url = og.imageUrl;
+
+  if (favicon_url && !isHttpUrl(favicon_url)) favicon_url = null;
+  if (preview_image_url && !isHttpUrl(preview_image_url)) {
+    preview_image_url = null;
+  }
 
   const max = await prisma.bookmarks.aggregate({
     where: { user_idx: BigInt(req.userIdx) },
@@ -164,16 +185,20 @@ export const updateBookmark = async (req: AuthRequest, res: Response) => {
         : String(req.body.description).trim() || null;
   }
   if (req.body?.faviconUrl !== undefined) {
-    data.favicon_url =
-      req.body.faviconUrl == null
-        ? null
-        : String(req.body.faviconUrl).trim() || null;
+    try {
+      data.favicon_url = optionalHttpUrl(req.body.faviconUrl);
+    } catch {
+      res.status(400).json({ error: 'faviconUrl must be http(s) URL' });
+      return;
+    }
   }
   if (req.body?.previewImageUrl !== undefined) {
-    data.preview_image_url =
-      req.body.previewImageUrl == null
-        ? null
-        : String(req.body.previewImageUrl).trim() || null;
+    try {
+      data.preview_image_url = optionalHttpUrl(req.body.previewImageUrl);
+    } catch {
+      res.status(400).json({ error: 'previewImageUrl must be http(s) URL' });
+      return;
+    }
   }
   if (req.body?.folderId !== undefined) {
     if (req.body.folderId == null || req.body.folderId === '') {
