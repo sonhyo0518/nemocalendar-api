@@ -110,10 +110,18 @@ export const updateTodo = async (req: AuthRequest, res: Response) => {
     req.body?.title != null ? String(req.body.title).trim() : existing.content;
 
     if (!(STATUSES as readonly string[]).includes(status)) {
-    res.status(400).json({ error: 'invalid status' });
-    return;
+      res.status(400).json({ error: 'invalid status' });
+      return;
     }
-
+    if (!(PRIORITIES as readonly string[]).includes(priority)) {
+      res.status(400).json({ error: 'invalid priority' });
+      return;
+    }
+    if (req.body?.title != null && !title) {
+      res.status(400).json({ error: 'title is required' });
+      return;
+    }
+    
     let category_idx = existing.category_idx;
     if (req.body?.categoryId != null) {
     const categoryId = String(req.body.categoryId).trim();

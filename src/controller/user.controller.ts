@@ -97,18 +97,11 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  let calendarConnected = false;
   const googleRefresh = await resolveGoogleRefreshToken(
     user.idx,
     user.google_refresh_token,
   );
-  if (googleRefresh) {
-    try {
-      calendarConnected = await hasCalendarScope(googleRefresh);
-    } catch {
-      calendarConnected = false;
-    }
-  }
+  const calendarConnected = Boolean(googleRefresh);
 
   res.json({
     user: {
@@ -232,18 +225,11 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    let calendarConnected = false;
     const googleRefresh = await resolveGoogleRefreshToken(
       user.idx,
       user.google_refresh_token,
     );
-    if (googleRefresh) {
-      try {
-        calendarConnected = await hasCalendarScope(googleRefresh);
-      } catch {
-        calendarConnected = false;
-      }
-    }
+    const calendarConnected = Boolean(googleRefresh);
 
     setAuthCookies(res, accessToken, refreshToken);
 

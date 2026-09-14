@@ -17,7 +17,11 @@ export async function requireOwned<T>(
 ): Promise<T | null> {
   const id = parseParamId(req);
   if (!id) {
-    res.status(400).json({ error: 'id is required' });
+    res.status(400).json({
+      error: req.params.id == null || req.params.id === ''
+        ? 'id is required'
+        : 'invalid id',
+    });
     return null;
   }
   if (!req.userIdx) {

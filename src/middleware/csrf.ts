@@ -26,8 +26,16 @@ export function createCsrfMiddleware(allowedOrigins: string[]) {
         typeof req.headers.referer === 'string' ? req.headers.referer : undefined,
       );
 
-    // curl/서버 간 호출 등 Origin 없음 → 쿠키 기반 브라우저 CSRF만 차단
+    // Origin/Referer 없음: 로컬·서버 간 호출은 허용.
+    // 프로덕션에서 쿠키가 있으면 브라우저 CSRF로 간주하고 차단.
     if (!origin) {
+      const hasAuthCookie =
+        Boolean(req.cookies?.accessToken) ||
+        Boolean(req.cookies?.refreshToken);
+      if (process.env.NODE_ENV === 'production' && hasAuthCookie) {
+        res.status(403).json({ error: 'CSRF blocked' });
+        return;
+      }
       next();
       return;
     }

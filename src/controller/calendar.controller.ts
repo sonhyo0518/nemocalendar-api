@@ -454,8 +454,9 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
 
     const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
-      res.status(400).json({
-        error: 'Google calendar not connected. Please log in again.',
+      res.status(403).json({
+        error: 'Calendar permission required',
+        code: 'NEEDS_CALENDAR_CONSENT',
       });
       return;
     }
@@ -549,8 +550,9 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
     
     const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
-      res.status(400).json({
-        error: 'Google calendar not connected. Please log in again.',
+      res.status(403).json({
+        error: 'Calendar permission required',
+        code: 'NEEDS_CALENDAR_CONSENT',
       });
       return;
     }
@@ -643,8 +645,9 @@ export const deleteEvent = async (req: AuthRequest, res: Response): Promise<void
 
     const rt = await getGoogleRefreshToken(BigInt(req.userIdx), user?.google_refresh_token); 
     if (!rt) {
-      res.status(400).json({
-        error: 'Google calendar not connected. Please log in again.',
+      res.status(403).json({
+        error: 'Calendar permission required',
+        code: 'NEEDS_CALENDAR_CONSENT',
       });
       return;
     }
