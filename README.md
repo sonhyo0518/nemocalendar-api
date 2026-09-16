@@ -6,19 +6,20 @@ NemoCalendar의 Express + TypeScript API 서버입니다. Google OAuth 로그인
 
 ## 기술 스택
 
-- Node.js, Express 5, TypeScript
-- Prisma + MySQL (`nemocalendar`)
+- Node.js (20.9+, 권장 22/24 LTS), Express 5, TypeScript
+- Prisma 6 + MySQL (`nemocalendar`)
 - Google OAuth 2.0, Google Calendar API
-- JWT 인증 (access + refresh)
+- JWT 인증 (access + refresh, httpOnly 쿠키)
 - Cloudflare R2 (배너 이미지, S3 호환 API), multer
-- helmet, express-rate-limit, cors
+- helmet, express-rate-limit, cors, CSRF Origin 검사
 
 ## 사전 준비
 
-- Node.js
+- Node.js 20.9 이상
 - MySQL (`nemocalendar` 데이터베이스)
 - Google Cloud OAuth 클라이언트 (로그인 / 캘린더 스코프)
 - Cloudflare R2 (배너 업로드 시, 선택)
+- WeatherAPI.com 키 (날씨 위젯, 선택)
 
 ## 시작하기
 
@@ -29,7 +30,7 @@ npm run db:migrate
 npm run dev
 ```
 
-서버가 뜨면 `http://localhost:5000` 에서 `Hello, TypeScript with Express!` 를 확인할 수 있습니다.
+서버가 뜨면 `http://localhost:5000` 에서 `Hello, TypeScript with Express!` 를 확인할 수 있습니다. 헬스 체크는 `GET /health` → `{ ok, db }` 입니다.
 
 빈 DB라면 `db:migrate`가 `prisma/migrations`의 SQL을 적용합니다. 이미 스키마가 있는 DB(예: 기존 TiDB)는 baseline이 `resolve --applied`된 상태여야 하며, `npm run db:status`로 확인합니다.
 
@@ -40,6 +41,8 @@ npm run dev
 | `npm run dev` | 개발 서버 (`tsx watch`) |
 | `npm run build` | TypeScript 빌드 (`dist/`) |
 | `npm start` | 빌드된 서버 실행 |
+| `npm test` | Vitest 테스트 실행 |
+| `npm run test:watch` | Vitest watch 모드 |
 | `npm run db:migrate` | pending migration 적용 (`migrate deploy`) |
 | `npm run db:migrate:dev` | 스키마 변경 → migration 생성·적용 (로컬) |
 | `npm run db:status` | migration 상태 |
@@ -48,6 +51,8 @@ npm run dev
 ## 환경 변수
 
 프로젝트 루트에 `.env` 파일을 만들고 아래 값을 채웁니다. 예시는 `.env.example`을 참고하세요.
+
+부팅 시 필수: `DATABASE_URL`, `JWT_SECRET`, `TOKEN_ENCRYPTION_KEY`(64 hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`. 프로덕션에서는 `CORS_ORIGINS`도 필수입니다.
 
 ```env
 DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/nemocalendar"
@@ -58,10 +63,11 @@ GOOGLE_REDIRECT_URI="postmessage"
 
 JWT_SECRET=""
 
-# Google refresh token 암호화 (32바이트 hex)
+# Google refresh token 암호화 (32바이트 hex = 64 hex chars)
 TOKEN_ENCRYPTION_KEY=""
 
 CORS_ORIGINS="http://localhost:3000"
+APP_PUBLIC_URL="http://localhost:3000"
 PORT=5000
 
 # WeatherAPI.com (날씨 위젯)
@@ -97,19 +103,28 @@ npx prisma generate         # 또는 npm run db:generate
 ## 인증
 
 보호된 API는 httpOnly 쿠키(`accessToken`) 또는 `Authorization: Bearer <accessToken>` 헤더로 인증합니다.
+쓰기 요청은 `writeLimiter`(또는 전용 limiter)를 거치고, 리소스 접근은 `requireOwned`로 소유권을 검증합니다.
+프로덕션에서는 Origin/Referer가 없는 쿠키 변이 요청을 CSRF로 차단합니다.
 
 1. `POST /api/user/google-login` 에 Google authorization `code`를 보냅니다.
 2. 응답과 함께 JWT가 **httpOnly 쿠키**(`accessToken`, `refreshToken`)로 설정됩니다.
 3. access token 만료 시 `POST /api/user/refresh` 로 쿠키를 갱신합니다. (쿠키 또는 body `{ "refreshToken": "..." }`)
 4. `POST /api/user/logout` 으로 쿠키를 삭제합니다.
 5. Google Calendar를 쓰려면 `POST /api/user/connect-calendar` 로 Google refresh token을 저장합니다. DB에는 `TOKEN_ENCRYPTION_KEY`로 AES-256-GCM 암호화됩니다.
+6. `DELETE /api/user/account` 으로 계정과 관련 데이터를 삭제합니다.
 
 - Access token: **1시간**
 - Refresh token: **7일** (갱신 시 rotation)
 
-캘린더 권한이 없으면 `403`과 `code: "NEEDS_CALENDAR_CONSENT"` 가 반환됩니다.
+캘린더 권한이 없으면 `403`과 `code: "NEEDS_CALENDAR_CONSENT"` 가 반환됩니다. `GET /me` 응답의 `calendarConnected`는 DB에 저장된 Google refresh token 유무입니다.
 
 ## API
+
+### Health
+
+| Method | Path | Auth | 설명 |
+| --- | --- | --- | --- |
+| GET | `/health` | 없음 | DB `SELECT 1`. `{ ok: true, db: true }` 또는 503 |
 
 ### User `/api/user`
 
@@ -118,9 +133,10 @@ npx prisma generate         # 또는 npm run db:generate
 | POST | `/google-login` | 없음 | Google 로그인. body: `{ "code": "..." }` → JWT 쿠키 설정 |
 | POST | `/refresh` | 없음 | JWT 갱신. 쿠키 또는 body: `{ "refreshToken": "..." }` |
 | POST | `/logout` | 없음 | 로그아웃. JWT 쿠키 삭제 |
-| GET | `/me` | 필요 | 현재 사용자 |
+| GET | `/me` | 필요 | 현재 사용자 (`calendarConnected` 포함) |
 | POST | `/connect-calendar` | 필요 | Google Calendar 연결. body: `{ "code": "..." }` |
 | POST | `/disconnect-calendar` | 필요 | Google Calendar 연결 해제 |
+| DELETE | `/account` | 필요 | 계정 탈퇴·데이터 삭제 |
 | PATCH | `/location` | 필요 | 날씨 위치 저장 |
 | PATCH | `/theme-color` | 필요 | 배너 테마 색상 |
 | POST | `/banner` | 필요 | 배너 이미지 업로드 (multipart) |
@@ -227,26 +243,43 @@ WeatherAPI.com 프록시. `WEATHER_API_KEY` 필요. in-memory 캐시(fresh 2h / 
 
 ```
 src/
-  app.ts                   # Express 앱
-  index.ts                 # listen 진입점
-  lib/prisma.ts            # Prisma 싱글톤
-  lib/auth-cookies.ts      # httpOnly JWT 쿠키
-  lib/token-crypto.ts      # Google refresh token 암호화
-  lib/r2.ts                # Cloudflare R2 업로드
-  middleware/auth.ts       # JWT 미들웨어 (쿠키 / Bearer)
-  middleware/rate-limit.ts # rate limiter
-  route/                   # Express 라우터
-  controller/              # 비즈니스 로직
-  utils/date-key.ts        # 날짜 키 유틸
-  generated/prisma/        # prisma generate 결과
+  app.ts                      # Express 앱 (CORS, CSRF, /health, 라우트)
+  index.ts                    # listen · 필수 env 검증
+  lib/
+    prisma.ts                 # Prisma 싱글톤
+    auth-cookies.ts           # httpOnly JWT 쿠키
+    jwt-tokens.ts             # access/refresh 발급
+    refresh-session.ts        # refresh rotation
+    token-crypto.ts           # Google refresh token 암호화
+    google-oauth.ts           # OAuth 클라이언트
+    google-refresh.ts         # Google token refresh
+    calendar-cache.ts         # 캘린더 in-memory 캐시
+    r2.ts                     # Cloudflare R2 업로드
+  middleware/
+    auth.ts                   # JWT (쿠키 / Bearer)
+    csrf.ts                   # Origin/Referer CSRF
+    rate-limit.ts             # auth / write / weather limiter
+  route/                      # Express 라우터
+  controller/                 # 비즈니스 로직
+  utils/
+    date-key.ts               # 날짜 키 유틸
+    owned.ts                  # requireOwned
+    params.ts                 # 경로 id 파싱
+    fetch-og-meta.ts          # 북마크 OG 메타
+    user-lock.ts              # 유저 단위 락
+  constants/                  # 공유 상수
+  generated/prisma/           # prisma generate 결과
 prisma/
   schema.prisma
-  migrations/              # Prisma Migrate (baseline: 0_init)
+  migrations/                 # Prisma Migrate (baseline: 0_init)
+tests/                        # Vitest
+Dockerfile                    # Render 배포용
+vitest.config.mts
 ```
 
 ## 버전·릴리즈
 
-앱 버전은 frontend와 동일한 SemVer를 씁니다. Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
+앱 버전은 frontend와 동일한 SemVer를 씁니다 (현재 **0.2.3**). Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
 
 → [RELEASE.md](./RELEASE.md)
 
