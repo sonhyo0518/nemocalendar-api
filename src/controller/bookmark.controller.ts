@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { fetchOgMeta } from '../utils/fetch-og-meta';
 import { requireOwned } from '../utils/owned';
+import { nextSequenceForUser, withUserLock } from '../utils/user-lock';
 
 function toBookmark(row: {
   idx: bigint;
@@ -125,24 +126,23 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
     preview_image_url = null;
   }
 
-  const max = await prisma.bookmarks.aggregate({
-    where: { user_idx: BigInt(req.userIdx) },
-    _max: { sequence: true },
+  const userIdx = BigInt(req.userIdx);
+  const row = await withUserLock(userIdx, async (tx) => {
+    const sequence = await nextSequenceForUser(tx, 'bookmarks', userIdx);
+    return tx.bookmarks.create({
+      data: {
+        user_idx: userIdx,
+        folder_idx,
+        url,
+        title,
+        description,
+        favicon_url,
+        preview_image_url,
+        sequence,
+      },
+    });
   });
-  const sequence = (max._max.sequence ?? -1) + 1;
 
-  const row = await prisma.bookmarks.create({
-    data: {
-      user_idx: BigInt(req.userIdx),
-      folder_idx,
-      url,
-      title,
-      description,
-      favicon_url,
-      preview_image_url,
-      sequence,
-    },
-  });
   res.status(201).json({ bookmark: toBookmark(row) });
 };
 

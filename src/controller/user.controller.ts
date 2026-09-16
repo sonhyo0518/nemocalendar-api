@@ -18,46 +18,12 @@ import { deleteBannerByUrl } from '../lib/r2';
 import { encryptSecret } from '../lib/token-crypto';
 import { resolveGoogleRefreshToken } from '../lib/google-refresh';
 import { createOAuthClient } from '../lib/google-oauth';
-
-const ACCESS_TOKEN_EXPIRES_IN = '1h' as const;
-const REFRESH_TOKEN_EXPIRES_IN = '7d' as const;
-
-type JwtPayload = {
-  userIdx: string;
-  email: string;
-  type: 'access' | 'refresh';
-  fid?: string; // refresh family id
-};
-
-function getJwtSecret(): string {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) throw new Error('JWT_SECRET is not configured');
-  return jwtSecret;
-}
-
-function signAccessToken(user: { idx: bigint; email: string }): string {
-  return jwt.sign(
-    { userIdx: user.idx.toString(), email: user.email, type: 'access' },
-    getJwtSecret(),
-    { expiresIn: ACCESS_TOKEN_EXPIRES_IN },
-  );
-}
-
-function signRefreshToken(
-  user: { idx: bigint; email: string },
-  family: string,
-): string {
-  return jwt.sign(
-    {
-      userIdx: user.idx.toString(),
-      email: user.email,
-      type: 'refresh',
-      fid: family,
-    },
-    getJwtSecret(),
-    { expiresIn: REFRESH_TOKEN_EXPIRES_IN },
-  );
-}
+import {
+  getJwtSecret,
+  signAccessToken,
+  signRefreshToken,
+  type JwtPayload,
+} from '../lib/jwt-tokens';
 
 async function exchangeCode(code: string) {
   const client = createOAuthClient();

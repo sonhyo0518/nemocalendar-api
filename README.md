@@ -227,7 +227,8 @@ WeatherAPI.com 프록시. `WEATHER_API_KEY` 필요. in-memory 캐시(fresh 2h / 
 
 ```
 src/
-  index.ts                 # 서버 진입점
+  app.ts                   # Express 앱
+  index.ts                 # listen 진입점
   lib/prisma.ts            # Prisma 싱글톤
   lib/auth-cookies.ts      # httpOnly JWT 쿠키
   lib/token-crypto.ts      # Google refresh token 암호화
