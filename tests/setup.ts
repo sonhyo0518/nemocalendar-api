@@ -1,12 +1,14 @@
 import path from 'path';
 import { config } from 'dotenv';
 
+const envPath = path.resolve(__dirname, '../.env.test');
 const loaded = config({
-  path: path.resolve(__dirname, '../.env.test'),
+  path: envPath,
   override: true,
 });
 
-if (loaded.error) {
+// 로컬: .env.test 필수. CI: 워크플로 env로 주입 가능
+if (loaded.error && !process.env.CI) {
   throw new Error(
     `Failed to load .env.test: ${loaded.error.message}. Create backend/.env.test first.`,
   );
