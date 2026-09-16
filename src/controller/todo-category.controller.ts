@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireOwned } from '../utils/owned';
+import { withUserLock } from '../utils/user-lock';
 
 const DEFAULT_CATEGORY = { name: '기타', color: '#F59E0B' };
 
@@ -17,14 +18,14 @@ export const getTodoCategories = async (req: AuthRequest, res: Response) => {
   }
   const userIdx = BigInt(req.userIdx);
 
-  let rows = await prisma.todo_categories.findMany({
-    where: { user_idx: userIdx },
-    orderBy: { sequence: 'asc' },
-  });
-
-  // 첫 요청이고 카테고리가 없으면 기본 1개 생성
-  if (rows.length === 0) {
-    const created = await prisma.todo_categories.create({
+  const rows = await withUserLock(userIdx, async (tx) => {
+    const existing = await tx.todo_categories.findMany({
+      where: { user_idx: userIdx },
+      orderBy: { sequence: 'asc' },
+    });
+    if (existing.length > 0) return existing;
+  
+    await tx.todo_categories.create({
       data: {
         user_idx: userIdx,
         name: DEFAULT_CATEGORY.name,
@@ -32,8 +33,12 @@ export const getTodoCategories = async (req: AuthRequest, res: Response) => {
         sequence: 0,
       },
     });
-    rows = [created];
-  }
+  
+    return tx.todo_categories.findMany({
+      where: { user_idx: userIdx },
+      orderBy: { sequence: 'asc' },
+    });
+  });
 
   res.json({ categories: rows.map(toCategory) });
 };
@@ -55,19 +60,16 @@ export const createTodoCategory = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const max = await prisma.todo_categories.aggregate({
-    where: { user_idx: BigInt(req.userIdx) },
-    _max: { sequence: true },
+  const userIdx = BigInt(req.userIdx);
+  const row = await withUserLock(userIdx, async (tx) => {
+    const { nextSequenceForUser } = await import('../utils/user-lock');
+    // 또는 파일 상단에서 nextSequenceForUser 함께 import
+    const sequence = await nextSequenceForUser(tx, 'todo_categories', userIdx);
+    return tx.todo_categories.create({
+      data: { user_idx: userIdx, name, color, sequence },
+    });
   });
 
-  const row = await prisma.todo_categories.create({
-    data: {
-      user_idx: BigInt(req.userIdx),
-      name,
-      color,
-      sequence: (max._max.sequence ?? -1) + 1,
-    },
-  });
   res.status(201).json({ category: toCategory(row) });
 };
 

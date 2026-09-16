@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireOwned } from '../utils/owned';
+import { nextSequenceForUser, withUserLock } from '../utils/user-lock';
 
 function toFolder(row: { idx: bigint; name: string; sequence: number }) {
   return {
@@ -34,18 +35,14 @@ export const createBookmarkFolder = async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const max = await prisma.bookmark_folders.aggregate({
-    where: { user_idx: BigInt(req.userIdx) },
-    _max: { sequence: true },
+  const userIdx = BigInt(req.userIdx);
+  const row = await withUserLock(userIdx, async (tx) => {
+    const sequence = await nextSequenceForUser(tx, 'bookmark_folders', userIdx);
+    return tx.bookmark_folders.create({
+      data: { user_idx: userIdx, name, sequence },
+    });
   });
-
-  const row = await prisma.bookmark_folders.create({
-    data: {
-      user_idx: BigInt(req.userIdx),
-      name,
-      sequence: (max._max.sequence ?? -1) + 1,
-    },
-  });
+  
   res.status(201).json({ folder: toFolder(row) });
 };
 
