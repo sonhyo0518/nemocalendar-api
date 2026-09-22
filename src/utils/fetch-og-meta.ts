@@ -4,6 +4,24 @@ import https from 'https';
 import type { IncomingMessage } from 'http';
 import net from 'net';
 
+/** ::ffff:x.x.x.x 또는 ::ffff:7f00:1 → dotted IPv4, 아니면 null */
+function ipv4FromMappedSuffix(mapped: string): string | null {
+  if (net.isIPv4(mapped)) return mapped;
+  const m = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(mapped);
+  if (!m) return null;
+  const hi = parseInt(m[1], 16);
+  const lo = parseInt(m[2], 16);
+  if (
+    Number.isNaN(hi) ||
+    Number.isNaN(lo) ||
+    hi > 0xffff ||
+    lo > 0xffff
+  ) {
+    return null;
+  }
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
 export function isPrivateIp(ip: string): boolean {
   if (net.isIPv4(ip)) {
     const parts = ip.split('.').map(Number);
@@ -19,7 +37,16 @@ export function isPrivateIp(ip: string): boolean {
   if (v === '::1') return true;
   if (v.startsWith('fc') || v.startsWith('fd')) return true;
   if (v.startsWith('fe80')) return true;
-  if (v.startsWith(':ffff:')) return isPrivateIp(v.slice(7));
+  // IPv4-mapped: dotted 또는 Node가 정규화한 hex (::ffff:7f00:1)
+  const mapped = v.startsWith('::ffff:')
+    ? v.slice('::ffff:'.length)
+    : v.startsWith(':ffff:')
+      ? v.slice(':ffff:'.length)
+      : null;
+  if (mapped) {
+    const v4 = ipv4FromMappedSuffix(mapped);
+    if (v4) return isPrivateIp(v4);
+  }
   return false;
 }
 

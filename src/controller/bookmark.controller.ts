@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { fetchOgMeta } from '../utils/fetch-og-meta';
+import { assertSafeHttpUrl, fetchOgMeta } from '../utils/fetch-og-meta';
 import { requireOwned } from '../utils/owned';
 import { nextSequenceForUser, withUserLock } from '../utils/user-lock';
 
@@ -47,6 +47,19 @@ function optionalHttpUrl(raw: unknown): string | null {
     throw err;
   }
   return s;
+}
+
+/** 저장용 미디어 URL: private/blocked면 null (북마크 자체는 유지) */
+async function safeStoredMediaUrl(
+  raw: string | null | undefined,
+): Promise<string | null> {
+  if (raw == null || raw === '') return null;
+  try {
+    await assertSafeHttpUrl(raw);
+    return raw;
+  } catch {
+    return null;
+  }
 }
 
 function defaultTitle(url: string) {
@@ -121,11 +134,9 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
   if (!favicon_url) favicon_url = og.faviconUrl;
   if (!preview_image_url) preview_image_url = og.imageUrl;
 
-  if (favicon_url && !isHttpUrl(favicon_url)) favicon_url = null;
-  if (preview_image_url && !isHttpUrl(preview_image_url)) {
-    preview_image_url = null;
-  }
-
+  favicon_url = await safeStoredMediaUrl(favicon_url);
+  preview_image_url = await safeStoredMediaUrl(preview_image_url);
+  
   const userIdx = BigInt(req.userIdx);
   const row = await withUserLock(userIdx, async (tx) => {
     const sequence = await nextSequenceForUser(tx, 'bookmarks', userIdx);
@@ -235,6 +246,13 @@ export const updateBookmark = async (req: AuthRequest, res: Response) => {
     if (req.body?.previewImageUrl === undefined && og.imageUrl) {
       data.preview_image_url = og.imageUrl;
     }
+  }
+  
+  if (data.favicon_url !== undefined) {
+    data.favicon_url = await safeStoredMediaUrl(data.favicon_url);
+  }
+  if (data.preview_image_url !== undefined) {
+    data.preview_image_url = await safeStoredMediaUrl(data.preview_image_url);
   }
   
   const row = await prisma.bookmarks.update({

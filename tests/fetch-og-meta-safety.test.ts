@@ -19,7 +19,28 @@ describe('OG URL safety (P3-6)', () => {
     expect(isPrivateIp('::1')).toBe(true);
     expect(isPrivateIp('fe80::1')).toBe(true);
   });
-
+  
+  it('flags IPv4-mapped private and allows mapped public', () => {
+    expect(isPrivateIp('::ffff:127.0.0.1')).toBe(true);
+    expect(isPrivateIp('::ffff:10.0.0.1')).toBe(true);
+    expect(isPrivateIp('::ffff:192.168.0.1')).toBe(true);
+    expect(isPrivateIp('::ffff:169.254.1.1')).toBe(true);
+    expect(isPrivateIp('::ffff:8.8.8.8')).toBe(false);
+    // Node URL이 [::ffff:127.0.0.1] → ::ffff:7f00:1 로 정규화
+    expect(isPrivateIp('::ffff:7f00:1')).toBe(true);
+    expect(isPrivateIp('::ffff:c0a8:1')).toBe(true); // 192.168.0.1
+    expect(isPrivateIp('::ffff:808:808')).toBe(false); // 8.8.8.8
+  });
+  
+  it('rejects IPv4-mapped private URL literals', async () => {
+    await expect(
+      assertSafeHttpUrl('http://[::ffff:127.0.0.1]/'),
+    ).rejects.toThrow();
+    await expect(
+      assertSafeHttpUrl('http://[::ffff:192.168.0.1]/path'),
+    ).rejects.toThrow();
+  });
+  
   it('rejects localhost and literal private URLs', async () => {
     await expect(assertSafeHttpUrl('http://localhost/')).rejects.toThrow();
     await expect(assertSafeHttpUrl('http://127.0.0.1/')).rejects.toThrow();
