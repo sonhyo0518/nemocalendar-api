@@ -476,17 +476,9 @@ export const createEvent = async (req: AuthRequest, res: Response): Promise<void
       calendarId: targetCalendarId,
       requestBody,
     });
-    // 캘린더 메타(이름/색) 조회
-    let calendarName = targetCalendarId;
-    let calendarColor = DEFAULT_BANNER_COLOR;
-    try {
-      const meta = await calendar.calendarList.get({
-        calendarId: targetCalendarId,
-      });
-      calendarName =
-        meta.data.summaryOverride || meta.data.summary || targetCalendarId;
-      calendarColor = meta.data.backgroundColor ?? calendarColor;
-    } catch {}
+    // 메타는 프론트 캘린더 캐시에서 보강 (calendarList.get 생략)
+    const calendarName = targetCalendarId;
+    const calendarColor = DEFAULT_BANNER_COLOR;
     const item = created.data;
     const event = toCalendarEventResponse({
       calendarId: targetCalendarId,
@@ -588,18 +580,8 @@ export const updateEvent = async (req: AuthRequest, res: Response): Promise<void
       requestBody,
     });
 
-    let calendarName = calendarId;
-    let calendarColor = DEFAULT_BANNER_COLOR;
-    try {
-      const meta = await calendar.calendarList.get({
-        calendarId: targetCalendarId,
-      });
-      calendarName =
-        meta.data.summaryOverride ||
-        meta.data.summary ||
-        targetCalendarId;
-      calendarColor = meta.data.backgroundColor ?? calendarColor;
-    } catch {}
+    const calendarName = targetCalendarId;
+    const calendarColor = DEFAULT_BANNER_COLOR;
 
     const item = patched.data;
     const event = toCalendarEventResponse({
