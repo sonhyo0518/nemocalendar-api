@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { DEFAULT_ANNIV_COLOR } from '../constants/colors';
 import { formatDateKey, parseDateKey } from '../utils/date-key';
 import { requireOwned } from '../utils/owned';
+import { MAX_TITLE_LEN } from '../constants/limits';
 
 function toAnniversary(row: {
   idx: bigint
@@ -60,6 +61,10 @@ export const createAnniversary = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'title is required' });
     return;
   }
+  if (title.length > MAX_TITLE_LEN) {
+    res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
+    return;
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ error: 'date is required (yyyy-mm-dd)' });
     return;
@@ -106,6 +111,10 @@ export const updateAnniversary = async (req: AuthRequest, res: Response) => {
 
   if (!title) {
     res.status(400).json({ error: 'title is required' });
+    return;
+  }
+  if (title.length > MAX_TITLE_LEN) {
+    res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
     return;
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {

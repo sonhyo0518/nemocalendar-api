@@ -4,6 +4,8 @@ import { prisma } from '../lib/prisma';
 import { assertSafeHttpUrl, fetchOgMeta } from '../utils/fetch-og-meta';
 import { requireOwned } from '../utils/owned';
 import { nextSequenceForUser, withUserLock } from '../utils/user-lock';
+import { parseBigIntIdString } from '../utils/params';
+import { MAX_TITLE_LEN } from '../constants/limits';
 
 function toBookmark(row: {
   idx: bigint;
@@ -95,6 +97,10 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
 
   // 클라이언트가 보낸 값 (있으면 우선)
   let title = String(req.body?.title ?? '').trim();
+  if (title && title.length > MAX_TITLE_LEN) {
+    res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
+    return;
+  }
   let description =
     req.body?.description == null
       ? null
@@ -113,9 +119,14 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
 
       let folder_idx: bigint | null = null;
       if (req.body?.folderId != null && req.body.folderId !== '') {
+        const folderId = parseBigIntIdString(req.body.folderId);
+        if (!folderId) {
+          res.status(400).json({ error: 'invalid folderId' });
+          return;
+        }
         const folder = await prisma.bookmark_folders.findFirst({
           where: {
-            idx: BigInt(String(req.body.folderId)),
+            idx: BigInt(folderId),
             user_idx: BigInt(req.userIdx),
           },
           select: { idx: true },
@@ -130,6 +141,7 @@ export const createBookmark = async (req: AuthRequest, res: Response) => {
   // OG로 비어 있는 필드만 채움
   const og = await fetchOgMeta(url);
   if (!title) title = og.title?.trim() || defaultTitle(url);
+  if (title.length > MAX_TITLE_LEN) title = title.slice(0, MAX_TITLE_LEN);
   if (!description) description = og.description;
   if (!favicon_url) favicon_url = og.faviconUrl;
   if (!preview_image_url) preview_image_url = og.imageUrl;
@@ -188,7 +200,14 @@ export const updateBookmark = async (req: AuthRequest, res: Response) => {
     data.url = url;
     urlChanged = url !== existing.url;
   }
-  if (req.body?.title != null) data.title = String(req.body.title).trim();
+  if (req.body?.title != null) {
+    const t = String(req.body.title).trim();
+    if (t.length > MAX_TITLE_LEN) {
+      res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
+      return;
+    }
+    data.title = t;
+  }
   if (req.body?.description !== undefined) {
     data.description =
       req.body.description == null
@@ -215,9 +234,14 @@ export const updateBookmark = async (req: AuthRequest, res: Response) => {
     if (req.body.folderId == null || req.body.folderId === '') {
       data.folder_idx = null;
     } else {
+      const folderId = parseBigIntIdString(req.body.folderId);
+      if (!folderId) {
+        res.status(400).json({ error: 'invalid folderId' });
+        return;
+      }
       const folder = await prisma.bookmark_folders.findFirst({
         where: {
-          idx: BigInt(String(req.body.folderId)),
+          idx: BigInt(folderId),
           user_idx: BigInt(req.userIdx),
         },
         select: { idx: true },
@@ -237,6 +261,9 @@ export const updateBookmark = async (req: AuthRequest, res: Response) => {
   if (urlChanged && data.url) {
     const og = await fetchOgMeta(data.url);
     if (req.body?.title == null && og.title) data.title = og.title;
+    if (data.title != null && data.title.length > MAX_TITLE_LEN) {
+      data.title = data.title.slice(0, MAX_TITLE_LEN);
+    }
     if (req.body?.description === undefined && og.description) {
       data.description = og.description;
     }

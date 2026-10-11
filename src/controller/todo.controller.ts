@@ -1,8 +1,10 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { formatDateKey, parseDateKey } from '../utils/date-key';
 import { requireOwned } from '../utils/owned';
+import { parseBigIntIdString } from '../utils/params';
+import { isDateKey, formatDateKey, parseDateKey } from '../utils/date-key';
+import { MAX_TITLE_LEN } from '../constants/limits';
 
 const STATUSES = ['todo', 'in-progress', 'done'] as const;
 const PRIORITIES = ['high', 'medium', 'low'] as const;
@@ -46,7 +48,7 @@ export const createTodo = async (req: AuthRequest, res: Response) => {
     return;
   }
   const title = String(req.body?.title ?? '').trim();
-  const categoryId = String(req.body?.categoryId ?? '').trim();
+  const categoryId = parseBigIntIdString(req.body?.categoryId);
   const due = String(req.body?.due ?? '').trim();
   const status = String(req.body?.status ?? 'todo');
   const priority = String(req.body?.priority ?? 'medium');
@@ -55,8 +57,17 @@ export const createTodo = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'title is required' });
     return;
   }
+  if (title.length > MAX_TITLE_LEN) {
+    res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
+    return;
+  }
   if (!categoryId) {
-    res.status(400).json({ error: 'categoryId is required' });
+    res.status(400).json({
+      error:
+        req.body?.categoryId == null || req.body?.categoryId === ''
+          ? 'categoryId is required'
+          : 'invalid categoryId',
+    });
     return;
   }
   if (!(STATUSES as readonly string[]).includes(status)) {
@@ -67,7 +78,11 @@ export const createTodo = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'invalid priority' });
     return;
   }
-
+  if (due && !isDateKey(due)) {
+    res.status(400).json({ error: 'due must be yyyy-mm-dd' });
+    return;
+  }
+  
   const userIdx = BigInt(req.userIdx);
   const category = await prisma.todo_categories.findFirst({
     where: { idx: BigInt(categoryId), user_idx: userIdx },
@@ -121,30 +136,43 @@ export const updateTodo = async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: 'title is required' });
       return;
     }
+    if (req.body?.title != null && title.length > MAX_TITLE_LEN) {
+      res.status(400).json({ error: `title max length is ${MAX_TITLE_LEN}` });
+      return;
+    }
     
     let category_idx = existing.category_idx;
     if (req.body?.categoryId != null) {
-    const categoryId = String(req.body.categoryId).trim();
-    if (!categoryId) {
+      if (req.body.categoryId === '' || req.body.categoryId === null) {
         category_idx = null;
-    } else {
+      } else {
+        const categoryId = parseBigIntIdString(req.body.categoryId);
+        if (!categoryId) {
+          res.status(400).json({ error: 'invalid categoryId' });
+          return;
+        }
         const category = await prisma.todo_categories.findFirst({
-        where: { idx: BigInt(categoryId), user_idx: BigInt(req.userIdx) },
+          where: { idx: BigInt(categoryId), user_idx: BigInt(req.userIdx) },
         });
         if (!category) {
-        res.status(400).json({ error: 'invalid categoryId' });
-        return;
+          res.status(400).json({ error: 'invalid categoryId' });
+          return;
         }
         category_idx = category.idx;
-    }
+      }
     }
 
     let target_date = existing.target_date;
     if (req.body?.due != null) {
-    const due = String(req.body.due).trim();
-    if (due) {
-      target_date = parseDateKey(due);
-    }
+      const due = String(req.body.due).trim();
+      if (due) {
+        if (!isDateKey(due)) {
+          res.status(400).json({ error: 'due must be yyyy-mm-dd' });
+          return;
+        }
+        target_date = parseDateKey(due);
+      }
+      // due === '' → target_date 유지 (필드 보낸 뒤 비운 경우도 기존 날짜 유지)
     }
 
     const row = await prisma.todos.update({

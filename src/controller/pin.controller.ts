@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireOwned } from '../utils/owned';
+import { MAX_PIN_LEN } from '../constants/limits';
 
 export const getPins = async (req: AuthRequest, res: Response) => {
   if (!req.userIdx) {
@@ -30,6 +31,10 @@ export const createPin = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: 'text is required' });
     return;
   }
+  if (content.length > MAX_PIN_LEN) {
+    res.status(400).json({ error: `text max length is ${MAX_PIN_LEN}` });
+    return;
+  }
   const p = await prisma.pins.create({
     data: {
       user_idx: BigInt(req.userIdx),
@@ -48,6 +53,10 @@ export const updatePin = async (req: AuthRequest, res: Response) => {
   const content = String(req.body?.text ?? '').trim();
   if (!content) {
     res.status(400).json({ error: 'text is required' });
+    return;
+  }
+  if (content.length > MAX_PIN_LEN) {
+    res.status(400).json({ error: `text max length is ${MAX_PIN_LEN}` });
     return;
   }
   const existing = await requireOwned(req, res, (args) =>
