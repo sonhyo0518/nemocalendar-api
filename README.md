@@ -102,7 +102,7 @@ npx prisma generate         # 또는 npm run db:generate
 
 ## 인증
 
-보호된 API는 httpOnly 쿠키(`accessToken`) 또는 `Authorization: Bearer <accessToken>` 헤더로 인증합니다.
+보호된 API는 httpOnly 쿠키(`accessToken`)로만 인증합니다. (`credentials: include`)
 쓰기 요청은 `writeLimiter`(또는 전용 limiter)를 거치고, 리소스 접근은 `requireOwned`로 소유권을 검증합니다.
 프로덕션에서는 Origin/Referer가 없는 쿠키 변이 요청을 CSRF로 차단합니다.
 
@@ -256,7 +256,7 @@ src/
     calendar-cache.ts         # 캘린더 in-memory 캐시
     r2.ts                     # Cloudflare R2 업로드
   middleware/
-    auth.ts                   # JWT (쿠키 / Bearer)
+    auth.ts                   # JWT (httpOnly 쿠키)
     csrf.ts                   # Origin/Referer CSRF
     rate-limit.ts             # auth / write / weather limiter
   route/                      # Express 라우터

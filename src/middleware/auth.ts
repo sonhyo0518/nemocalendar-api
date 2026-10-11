@@ -12,17 +12,24 @@ export const authMiddleware = (
   next: NextFunction
 ): void => {
   const header = req.headers.authorization;
-const cookieToken =
-  typeof req.cookies?.accessToken === 'string'
-    ? req.cookies.accessToken
-    : null;
-const raw =
-  header?.startsWith('Bearer ') ? header.slice(7) : cookieToken;
-
-if (!raw) {
-  res.status(401).json({ error: 'Unauthorized' });
-  return;
-}
+  const hasBearer =
+    typeof header === 'string' && header.startsWith('Bearer ');
+  
+  // httpOnly 쿠키 계약: Bearer는 사용하지 않음. prod에서는 오용을 400/401으로 거절.
+  if (hasBearer && process.env.NODE_ENV === 'production') {
+    res.status(401).json({ error: 'Cookie authentication required' });
+    return;
+  }
+  
+  const raw =
+    typeof req.cookies?.accessToken === 'string'
+      ? req.cookies.accessToken
+      : null;
+  
+  if (!raw) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
 
   try {
     const token = raw;
