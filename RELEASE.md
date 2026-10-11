@@ -9,7 +9,7 @@ Nemo Calendar는 **앱 단위 단일 SemVer**를 씁니다.
 | --- | --- |
 | Changelog | [CHANGELOG.md](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/CHANGELOG.md) |
 | Versioning · 태그 규칙 | [VERSIONING.md](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/VERSIONING.md) |
-| 사용자용 릴리즈 노트 | 사이트 [`/changelog`](https://nemocalendar.vercel.app/changelog) |
+| 사용자용 릴리즈 노트 | 사이트 [`/changelog`](https://nemocalendar.com/changelog) |
 
 로컬 워크스페이스(`nemoCalendar2/`)에서는 `../frontend/CHANGELOG.md`, `../frontend/VERSIONING.md`를 편집·참고하세요.
 
