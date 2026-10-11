@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, feat/0.2.3-quality-gate]
+    branches: [main]
 
 jobs:
   build-test:
