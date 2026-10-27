@@ -162,16 +162,14 @@ export const createEvent = async (
       return;
     }
 
-    const { title, date, endDate, time, endTime, calendarId, category } =
-      req.body as {
-        title?: string;
-        date?: string;
-        endDate?: string;
-        time?: string;
-        endTime?: string;
-        calendarId?: string;
-        category?: string;
-      };
+    const { title, date, endDate, time, endTime, calendarId } = req.body as {
+      title?: string;
+      date?: string;
+      endDate?: string;
+      time?: string;
+      endTime?: string;
+      calendarId?: string;
+    };
     if (!title || !date) {
       res.status(400).json({ error: 'title and date are required' });
       return;
@@ -202,7 +200,6 @@ export const createEvent = async (
       endDate,
       time,
       endTime,
-      category,
     });
 
     const created = await calendar.events.insert({
@@ -253,7 +250,6 @@ export const updateEvent = async (
       calendarId,
       destinationCalendarId,
       googleEventId,
-      category,
     } = req.body as {
       title?: string;
       date?: string;
@@ -263,7 +259,6 @@ export const updateEvent = async (
       calendarId?: string;
       destinationCalendarId?: string;
       googleEventId?: string;
-      category?: string;
     };
     if (!title || !date || !calendarId || !googleEventId) {
       res.status(400).json({
@@ -307,7 +302,6 @@ export const updateEvent = async (
       endDate,
       time,
       endTime,
-      category,
     });
 
     const patched = await calendar.events.patch({

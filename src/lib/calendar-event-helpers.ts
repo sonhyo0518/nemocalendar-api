@@ -101,44 +101,20 @@ function normalizeInclusiveEnd(date: string, endDate?: string): string {
   return endDate;
 }
 
-type EventCategory = 'work' | 'personal' | 'study' | 'health' | 'etc';
-
-const VALID_CATEGORIES: EventCategory[] = [
-  'work',
-  'personal',
-  'study',
-  'health',
-  'etc',
-];
-
-function normalizeCategory(value: unknown): EventCategory {
-  if (typeof value !== 'string') return 'etc';
-  return (VALID_CATEGORIES as string[]).includes(value)
-    ? (value as EventCategory)
-    : 'etc';
-}
-
 export function buildGoogleEventBody(input: {
   title: string;
   date: string;
   endDate?: string;
   time?: string;
   endTime?: string;
-  category?: string;
 }) {
   const { title, date, time, endTime } = input;
   const endInclusive = normalizeInclusiveEnd(date, input.endDate);
-  const extendedProperties = {
-    private: {
-      appCategory: normalizeCategory(input.category),
-    },
-  };
   if (!time) {
     return {
       summary: title,
       start: { date, dateTime: null as null },
       end: { date: shiftDateKey(endInclusive, 1), dateTime: null as null },
-      extendedProperties,
     };
   }
 
@@ -159,7 +135,6 @@ export function buildGoogleEventBody(input: {
     summary: title,
     start: { dateTime: startIso, date: null as null },
     end: { dateTime: endIso, date: null as null },
-    extendedProperties,
   };
 }
 
@@ -209,9 +184,7 @@ export function toCalendarEventResponse(input: {
     calendarId: input.calendarId,
     calendarName: input.calendarName,
     calendarColor: input.calendarColor,
-    category: normalizeCategory(
-      input.item.extendedProperties?.private?.appCategory,
-    ),
+    category: 'etc',
     fromGoogle: true,
   };
 }
