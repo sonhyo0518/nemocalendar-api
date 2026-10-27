@@ -7,8 +7,8 @@ Nemo Calendar는 **앱 단위 단일 SemVer**를 씁니다.
 
 | 문서 | 링크 |
 | --- | --- |
-| Changelog | [CHANGELOG.md](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/CHANGELOG.md) |
-| Versioning · 태그 규칙 | [VERSIONING.md](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/VERSIONING.md) |
+| Changelog | [CHANGELOG.md](https://github.com/sonhyo0518/nemocalendar/blob/main/CHANGELOG.md) |
+| Versioning · 태그 규칙 | [VERSIONING.md](https://github.com/sonhyo0518/nemocalendar/blob/main/VERSIONING.md) |
 | 사용자용 릴리즈 노트 | 사이트 [`/changelog`](https://nemocalendar.com/changelog) |
 
 로컬 워크스페이스(`nemoCalendar2/`)에서는 `../frontend/CHANGELOG.md`, `../frontend/VERSIONING.md`를 편집·참고하세요.
@@ -21,4 +21,4 @@ frontend 릴리즈(CHANGELOG·tag)가 끝난 뒤, **같은 `X.Y.Z`** 로 맞춘�
 2. `chore(release): vX.Y.Z` 커밋 후 annotated tag `vX.Y.Z` (`-m "Release vX.Y.Z"`)를 단다.
 3. `git push origin HEAD` 및 `git push origin vX.Y.Z`.
 
-전체 순서·확인 명령은 frontend [VERSIONING.md — 듀얼 레포 릴리즈 절차](https://github.com/sonhyo0518/nemocalendar-frontend/blob/main/VERSIONING.md)를 따른다.
+전체 순서·확인 명령은 frontend [VERSIONING.md — 듀얼 레포 릴리즈 절차](https://github.com/sonhyo0518/nemocalendar/blob/main/VERSIONING.md)를 따른다.
