@@ -279,7 +279,7 @@ vitest.config.mts
 
 ## 버전·릴리즈
 
-앱 버전은 frontend와 동일한 SemVer를 씁니다 (현재 **0.3.0**). Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
+앱 버전은 frontend와 동일한 SemVer를 씁니다 (현재 **0.3.1**). Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
 
 → [RELEASE.md](./RELEASE.md)
 
