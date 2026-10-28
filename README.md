@@ -108,7 +108,7 @@ npx prisma generate         # 또는 npm run db:generate
 
 1. `POST /api/user/google-login` 에 Google authorization `code`를 보냅니다.
 2. 응답과 함께 JWT가 **httpOnly 쿠키**(`accessToken`, `refreshToken`)로 설정됩니다.
-3. access token 만료 시 `POST /api/user/refresh` 로 쿠키를 갱신합니다. (쿠키 또는 body `{ "refreshToken": "..." }`)
+3. access token 만료 시 `POST /api/user/refresh` 로 **httpOnly 쿠키**의 refresh token을 갱신합니다. (body 토큰은 허용하지 않음)
 4. `POST /api/user/logout` 으로 쿠키를 삭제합니다.
 5. Google Calendar를 쓰려면 `POST /api/user/connect-calendar` 로 Google refresh token을 저장합니다. DB에는 `TOKEN_ENCRYPTION_KEY`로 AES-256-GCM 암호화됩니다.
 6. `DELETE /api/user/account` 으로 계정과 관련 데이터를 삭제합니다.
@@ -131,7 +131,7 @@ npx prisma generate         # 또는 npm run db:generate
 | Method | Path | Auth | 설명 |
 | --- | --- | --- | --- |
 | POST | `/google-login` | 없음 | Google 로그인. body: `{ "code": "..." }` → JWT 쿠키 설정 |
-| POST | `/refresh` | 없음 | JWT 갱신. 쿠키 또는 body: `{ "refreshToken": "..." }` |
+| POST | `/refresh` | 없음 | JWT 갱신. httpOnly 쿠키 `refreshToken`만 사용 (body 미허용) |
 | POST | `/logout` | 없음 | 로그아웃. JWT 쿠키 삭제 |
 | GET | `/me` | 필요 | 현재 사용자 (`calendarConnected` 포함) |
 | POST | `/connect-calendar` | 필요 | Google Calendar 연결. body: `{ "code": "..." }` |
@@ -279,7 +279,7 @@ vitest.config.mts
 
 ## 버전·릴리즈
 
-앱 버전은 frontend와 동일한 SemVer를 씁니다 (현재 **0.3.1**). Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
+앱 버전은 frontend와 동일한 SemVer를 씁니다 (현재 **0.3.3**). Changelog·태그 규칙의 canonical 문서는 frontend 레포에 있습니다.
 
 → [RELEASE.md](./RELEASE.md)
 

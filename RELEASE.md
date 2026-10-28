@@ -9,9 +9,12 @@ Nemo Calendar는 **앱 단위 단일 SemVer**를 씁니다.
 | --- | --- |
 | Changelog | [CHANGELOG.md](https://github.com/sonhyo0518/nemocalendar/blob/main/CHANGELOG.md) |
 | Versioning · 태그 규칙 | [VERSIONING.md](https://github.com/sonhyo0518/nemocalendar/blob/main/VERSIONING.md) |
+| Deployment | [DEPLOYMENT.md](https://github.com/sonhyo0518/nemocalendar/blob/main/DEPLOYMENT.md) |
+| Roadmap | [ROADMAP.md](https://github.com/sonhyo0518/nemocalendar/blob/main/ROADMAP.md) |
+| 프로젝트 설명 | [프로젝트 설명.md](https://github.com/sonhyo0518/nemocalendar/blob/main/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8%20%EC%84%A4%EB%AA%85.md) |
 | 사용자용 릴리즈 노트 | 사이트 [`/changelog`](https://nemocalendar.com/changelog) |
 
-로컬 워크스페이스(`nemoCalendar2/`)에서는 `../frontend/CHANGELOG.md`, `../frontend/VERSIONING.md`를 편집·참고하세요.
+로컬 워크스페이스(`nemoCalendar2/`)에서는 `../frontend/` 아래 동명 파일을 편집·참고하세요.
 
 ## 이 레포에서 할 일 (요약)
 
