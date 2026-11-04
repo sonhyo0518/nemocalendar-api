@@ -11,5 +11,18 @@ jobs:
     steps:
       - name: Ping health
         run: |
-          curl -fsS --max-time 90 \
-            "${{ vars.API_HEALTH_URL || 'https://nemocalendar-api.onrender.com/health' }}"
+          set -euo pipefail
+          URL="${{ vars.API_HEALTH_URL || 'https://nemocalendar-api.onrender.com/health' }}"
+          tmp="$(mktemp)"
+          code="$(curl -sS -o "$tmp" -w "%{http_code}" --max-time 90 "$URL" || true)"
+          echo "HTTP $code"
+          echo "Body:"
+          cat "$tmp" || true
+          if [ "$code" != "200" ]; then
+            echo "::error::health check failed (HTTP $code)"
+            exit 1
+          fi
+          if ! grep -q '"ok":true' "$tmp" || ! grep -q '"db":true' "$tmp"; then
+            echo "::error::health body missing ok/db true"
+            exit 1
+          fi

@@ -13,10 +13,14 @@ import bookmarkFolderRoutes from './route/bookmark-folder.route';
 import cookieParser from 'cookie-parser';
 import { prisma } from './lib/prisma';
 import { createCsrfMiddleware } from './middleware/csrf';
+import { requestIdMiddleware } from './middleware/request-id';
+import { requestLogMiddleware } from './middleware/request-log';
 
 export const app = express();
 
 app.set('trust proxy', 1);
+app.use(requestIdMiddleware);
+app.use(requestLogMiddleware);
 app.use(helmet());
 
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
@@ -43,12 +47,12 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Hello, TypeScript with Express!');
 });
 
-app.get('/health', async (_req: Request, res: Response) => {
+app.get('/health', async (req: Request, res: Response) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.status(200).json({ ok: true, db: true });
   } catch (err) {
-    console.error('[health]', err);
+    console.error('[health]', { requestId: req.requestId, err });
     res.status(503).json({ ok: false, db: false });
   }
 });
@@ -66,7 +70,7 @@ app.use('/api/bookmark-folders', bookmarkFolderRoutes);
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   const isCorsError = err.message.startsWith('CORS blocked');
   const status = isCorsError ? 403 : 500;
-  console.error(`[Error] ${err.message}`);
+  console.error('[Error]', { requestId: req.requestId, message: err.message });
   res.status(status).json({
     error: isCorsError ? err.message : 'Internal Server Error',
   });
