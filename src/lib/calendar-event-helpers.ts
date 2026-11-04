@@ -265,5 +265,5 @@ export function toCalendarOptions(
       primary: Boolean(c.primary),
       selected: c.selected !== false,
     }))
-    .sort((a, b) => Number(b.primary) - Number(a.primary));
+    .sort((a, b) => a.summary.localeCompare(b.summary, 'ko'));
 }
