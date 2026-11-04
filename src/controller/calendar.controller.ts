@@ -100,7 +100,12 @@ export const getEvents = async (
     }
 
     const userIdx = String(req.userIdx);
-    const cached = readCalCache(userIdx, range.from, range.to);
+    const fresh =
+      req.query.fresh === '1' ||
+      req.query.fresh === 'true';
+    const cached = fresh
+      ? null
+      : readCalCache(userIdx, range.from, range.to);
     if (cached) {
       res.status(200).json({
         events: cached.events,
